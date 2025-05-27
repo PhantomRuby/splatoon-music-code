@@ -1,11 +1,11 @@
 {
-    "name": "hsmusic-wiki",
+    "name": "splatoon-music-wiki",
     "version": "0.1.0",
     "description": "static wiki software cataloguing collaborative creation",
     "type": "module",
     "main": "src/upd8.js",
     "bin": {
-        "hsmusic": "./src/upd8.js"
+        "splatoon-music": "./src/upd8.js"
     },
     "scripts": {
         "test": "tap",
