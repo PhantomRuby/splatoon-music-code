@@ -17,6 +17,9 @@ export default {
     sourceLinks:
       entry.sourceURLs
         .map(url => relation('linkExternal', url)),
+
+    originDetails:
+      relation('transformContent', entry.originDetails),
   }),
 
   data: (entry) => ({
@@ -25,6 +28,30 @@ export default {
 
     hasSquareBracketAnnotations:
       entry.hasSquareBracketAnnotations,
+
+    numStanzas:
+      1 +
+
+      (Array.from(
+        entry.body
+          .matchAll(/\n\n|<br><br>/g))
+
+        .length) +
+
+      (entry.body.includes('<br')
+        ? entry.body.split('\n').length
+        : 0),
+
+    numLines:
+      1 +
+
+      (Array.from(
+        entry.body
+          .replaceAll(/(<br>){1,}/g, '\n')
+          .replaceAll(/\n{2,}/g, '\n')
+          .matchAll(/\n/g))
+
+        .length),
   }),
 
   slots: {
@@ -36,8 +63,15 @@ export default {
 
   generate: (data, relations, slots, {html, language}) =>
     language.encapsulate('misc.lyrics', capsule =>
-      html.tag('div', {class: 'lyrics-entry'},
+      html.tag('blockquote', {class: 'lyrics-entry'},
         slots.attributes,
+
+        {'data-stanzas': data.numStanzas},
+        {'data-lines': data.numLines},
+
+        (data.numStanzas > 1 ||
+         data.numLines > 8) &&
+          {class: 'long-lyrics'},
 
         [
           html.tag('p', {class: 'lyrics-details'},
@@ -74,6 +108,14 @@ export default {
               data.hasSquareBracketAnnotations &&
                 language.$(capsule, 'squareBracketAnnotations'),
             ]),
+
+          html.tag('p', {class: 'origin-details'},
+            {[html.onlyIfContent]: true},
+
+            relations.originDetails.slots({
+              mode: 'inline',
+              absorbPunctuationFollowingExternalLinks: false,
+            })),
 
           relations.content.slot('mode', 'lyrics'),
         ])),

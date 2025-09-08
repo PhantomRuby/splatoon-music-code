@@ -17,7 +17,7 @@ import {
   validateReference,
 } from '#validators';
 
-import {exposeDependency} from '#composite/control-flow';
+import {exposeConstant, exposeDependency} from '#composite/control-flow';
 import {withResolvedReference} from '#composite/wiki-data';
 
 import {
@@ -47,6 +47,14 @@ export class HomepageLayout extends Thing {
     sections: thingList({
       class: input.value(HomepageLayoutSection),
     }),
+
+    // Expose only
+
+    isHomepageLayout: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = {
@@ -63,7 +71,6 @@ export class HomepageLayout extends Thing {
     thingConstructors: {
       HomepageLayout,
       HomepageLayoutSection,
-      HomepageLayoutAlbumsRow,
     },
   }) => ({
     title: `Process homepage layout file`,
@@ -157,6 +164,14 @@ export class HomepageLayoutSection extends Thing {
     rows: thingList({
       class: input.value(HomepageLayoutRow),
     }),
+
+    // Expose only
+
+    isHomepageLayoutSection: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = {
@@ -182,6 +197,12 @@ export class HomepageLayoutRow extends Thing {
     find: soupyFind(),
 
     // Expose only
+
+    isHomepageLayoutRow: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     type: {
       flags: {expose: true},
@@ -234,6 +255,12 @@ export class HomepageLayoutActionsRow extends HomepageLayoutRow {
 
     // Expose only
 
+    isHomepageLayoutActionsRow: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     type: {
       flags: {expose: true},
       expose: {compute: () => 'actions'},
@@ -250,7 +277,7 @@ export class HomepageLayoutActionsRow extends HomepageLayoutRow {
 export class HomepageLayoutAlbumCarouselRow extends HomepageLayoutRow {
   static [Thing.friendlyName] = `Homepage Album Carousel Row`;
 
-  static [Thing.getPropertyDescriptors] = (opts, {Album, Group} = opts) => ({
+  static [Thing.getPropertyDescriptors] = (opts, {Album} = opts) => ({
     ...HomepageLayoutRow[Thing.getPropertyDescriptors](opts),
 
     // Update & expose
@@ -261,6 +288,12 @@ export class HomepageLayoutAlbumCarouselRow extends HomepageLayoutRow {
     }),
 
     // Expose only
+
+    isHomepageLayoutAlbumCarouselRow: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     type: {
       flags: {expose: true},
@@ -321,6 +354,12 @@ export class HomepageLayoutAlbumGridRow extends HomepageLayoutRow {
     },
 
     // Expose only
+
+    isHomepageLayoutAlbumGridRow: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     type: {
       flags: {expose: true},

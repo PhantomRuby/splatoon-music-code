@@ -11,11 +11,14 @@ export default {
     'generateAlbumSecondaryNav',
     'generateAlbumSidebar',
     'generateAlbumSocialEmbed',
-    'generateAlbumStyleRules',
+    'generateAlbumStyleTags',
     'generateAlbumTrackList',
+    'generateCommentaryContentHeading',
     'generateCommentaryEntry',
+    'generateContentContentHeading',
     'generateContentHeading',
     'generatePageLayout',
+    'generateReadCommentaryLine',
     'linkAlbumCommentary',
     'linkAlbumGallery',
   ],
@@ -26,8 +29,8 @@ export default {
     layout:
       relation('generatePageLayout'),
 
-    albumStyleRules:
-      relation('generateAlbumStyleRules', album, null),
+    albumStyleTags:
+      relation('generateAlbumStyleTags', album, null),
 
     socialEmbed:
       relation('generateAlbumSocialEmbed', album),
@@ -55,6 +58,9 @@ export default {
     contentHeading:
       relation('generateContentHeading'),
 
+    contentContentHeading:
+      relation('generateContentContentHeading', album),
+
     releaseInfo:
       relation('generateAlbumReleaseInfo', album),
 
@@ -64,15 +70,21 @@ export default {
         : null),
 
     commentaryLink:
-      ([album, ...album.tracks].some(({commentary}) => !empty(commentary))
+      (album.tracks.some(track => !empty(track.commentary))
         ? relation('linkAlbumCommentary', album)
         : null),
+
+    readCommentaryLine:
+      relation('generateReadCommentaryLine', album),
 
     trackList:
       relation('generateAlbumTrackList', album),
 
     additionalFilesList:
       relation('generateAdditionalFilesList', album.additionalFiles),
+
+    commentaryContentHeading:
+      relation('generateCommentaryContentHeading', album),
 
     artistCommentaryEntries:
       album.commentary
@@ -104,7 +116,7 @@ export default {
 
         color: data.color,
         headingMode: 'sticky',
-        styleRules: [relations.albumStyleRules],
+        styleTags: relations.albumStyleTags,
 
         additionalNames: relations.additionalNamesBox,
 
@@ -156,6 +168,10 @@ export default {
 
                 : html.blank()),
 
+              !relations.commentaryLink &&
+              !html.isBlank(relations.artistCommentaryEntries) &&
+                relations.readCommentaryLine,
+
               !html.isBlank(relations.creditSourceEntries) &&
                 language.encapsulate(capsule, 'readCreditingSources', capsule =>
                   language.$(capsule, {
@@ -170,14 +186,16 @@ export default {
 
           html.tag('p',
             {[html.onlyIfContent]: true},
-            {[html.joinChildren]: html.tag('br')},
 
-            language.encapsulate('releaseInfo', capsule => [
-              language.$(capsule, 'addedToWiki', {
-                [language.onlyIfOptions]: ['date'],
-                date: language.formatDate(data.dateAddedToWiki),
-              }),
-            ])),
+            language.$('releaseInfo.addedToWiki', {
+              [language.onlyIfOptions]: ['date'],
+              date: language.formatDate(data.dateAddedToWiki),
+            })),
+
+          (!html.isBlank(relations.artistCommentaryEntries) ||
+           !html.isBlank(relations.creditSourceEntries))
+          &&
+            html.tag('hr', {class: 'main-separator'}),
 
           language.encapsulate('releaseInfo.additionalFiles', capsule =>
             html.tags([
@@ -191,20 +209,15 @@ export default {
             ])),
 
           html.tags([
-            relations.contentHeading.clone()
-              .slots({
-                attributes: {id: 'artist-commentary'},
-                title: language.$('misc.artistCommentary'),
-              }),
-
+            relations.commentaryContentHeading,
             relations.artistCommentaryEntries,
           ]),
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'crediting-sources'},
-                title: language.$('misc.creditingSources'),
+                string: 'misc.creditingSources',
               }),
 
             relations.creditSourceEntries,

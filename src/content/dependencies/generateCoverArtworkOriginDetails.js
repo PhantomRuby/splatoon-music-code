@@ -1,5 +1,3 @@
-import Thing from '#thing';
-
 export default {
   contentDependencies: [
     'generateArtistCredit',
@@ -11,9 +9,6 @@ export default {
   extraDependencies: ['html', 'language', 'pagePath'],
 
   query: (artwork) => ({
-    artworkThingType:
-      artwork.thing.constructor[Thing.referenceType],
-
     attachedArtistContribs:
       (artwork.attachedArtwork
         ? artwork.attachedArtwork.artistContribs
@@ -29,8 +24,11 @@ export default {
     source:
       relation('transformContent', artwork.source),
 
+    originDetails:
+      relation('transformContent', artwork.originDetails),
+
     albumLink:
-      (query.artworkThingType === 'album'
+      (artwork.thing.isAlbum
         ? relation('linkAlbum', artwork.thing)
         : null),
 
@@ -45,15 +43,21 @@ export default {
     label:
       artwork.label,
 
-    artworkThingType:
-      query.artworkThingType,
+    forAlbum:
+      artwork.thing.isAlbum,
+
+    forSingleStyleAlbum:
+      artwork.thing.isAlbum &&
+      artwork.thing.style === 'single',
+
+    showFilename:
+      artwork.showFilename,
   }),
 
   generate: (data, relations, {html, language, pagePath}) =>
     language.encapsulate('misc.coverArtwork', capsule =>
       html.tag('p', {class: 'image-details'},
         {[html.onlyIfContent]: true},
-        {[html.joinChildren]: html.tag('br')},
 
         {class: 'origin-details'},
 
@@ -94,7 +98,8 @@ export default {
 
           const trackArtFromAlbum =
             pagePath[0] === 'track' &&
-            data.artworkThingType === 'album' &&
+            data.forAlbum &&
+            !data.forSingleStyleAlbum &&
               language.$(capsule, 'trackArtFromAlbum', {
                 album:
                   relations.albumLink.slot('color', false),
@@ -146,12 +151,35 @@ export default {
               year: relations.datetimestamp,
             });
 
+          const originDetailsLine =
+            html.tag('span', {class: 'origin-details-line'},
+              {[html.onlyIfContent]: true},
+
+              relations.originDetails.slots({
+                mode: 'inline',
+                absorbPunctuationFollowingExternalLinks: false,
+              }));
+
+          const filenameLine =
+            html.tag('span', {class: 'filename-line'},
+              {[html.onlyIfContent]: true},
+
+              html.tag('code', {class: 'filename'},
+                {[html.onlyIfContent]: true},
+
+                language.sanitize(data.showFilename)));
+
           return [
-            artworkBy,
-            trackArtFromAlbum,
-            source,
-            label,
-            year,
+            html.tags([
+              artworkBy,
+              trackArtFromAlbum,
+              source,
+              label,
+              year,
+            ], {[html.joinChildren]: html.tag('br')}),
+
+            originDetailsLine,
+            filenameLine,
           ];
         })())),
 };

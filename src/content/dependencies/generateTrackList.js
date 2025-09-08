@@ -2,9 +2,18 @@ export default {
   contentDependencies: ['generateTrackListItem'],
   extraDependencies: ['html'],
 
-  relations: (relation, tracks) => ({
+  query: (tracks, contextTrack) => ({
+    presentedTracks:
+      (contextTrack
+        ? tracks.map(track =>
+            track.otherReleases.find(({album}) => album === contextTrack.album) ??
+            track)
+        : tracks),
+  }),
+
+  relations: (relation, query, _tracks, _contextTrack) => ({
     items:
-      tracks
+      query.presentedTracks
         .map(track => relation('generateTrackListItem', track, [])),
   }),
 

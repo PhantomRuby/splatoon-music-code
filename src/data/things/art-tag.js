@@ -1,15 +1,23 @@
+export const DATA_ART_TAGS_DIRECTORY = 'art-tags';
 export const ART_TAG_DATA_FILE = 'tags.yaml';
 
+import {readFile} from 'node:fs/promises';
+import * as path from 'node:path';
+
 import {input} from '#composite';
-import find from '#find';
-import {sortAlphabetically, sortAlbumsTracksChronologically} from '#sort';
+import {traverse} from '#node-utils';
+import {sortAlphabetically} from '#sort';
 import Thing from '#thing';
 import {unique} from '#sugar';
 import {isName} from '#validators';
 import {parseAdditionalNames, parseAnnotatedReferences} from '#yaml';
 
-import {exitWithoutDependency, exposeDependency, exposeUpdateValueOrContinue}
-  from '#composite/control-flow';
+import {
+  exitWithoutDependency,
+  exposeConstant,
+  exposeDependency,
+  exposeUpdateValueOrContinue,
+} from '#composite/control-flow';
 
 import {
   annotatedReferenceList,
@@ -24,7 +32,6 @@ import {
   soupyReverse,
   thingList,
   urls,
-  wikiData,
 } from '#composite/wiki-properties';
 
 import {withAllDescendantArtTags, withAncestorArtTagBaobabTree}
@@ -34,11 +41,7 @@ export class ArtTag extends Thing {
   static [Thing.referenceType] = 'tag';
   static [Thing.friendlyName] = `Art Tag`;
 
-  static [Thing.getPropertyDescriptors] = ({
-    AdditionalName,
-    Album,
-    Track,
-  }) => ({
+  static [Thing.getPropertyDescriptors] = ({AdditionalName}) => ({
     // Update & expose
 
     name: name('Unnamed Art Tag'),
@@ -84,6 +87,12 @@ export class ArtTag extends Thing {
     reverse: soupyReverse(),
 
     // Expose only
+
+    isArtTag: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     descriptionShort: [
       exitWithoutDependency({
@@ -180,13 +189,25 @@ export class ArtTag extends Thing {
   };
 
   static [Thing.getYamlLoadingSpec] = ({
-    documentModes: {allInOne},
+    documentModes: {allTogether},
     thingConstructors: {ArtTag},
   }) => ({
     title: `Process art tags file`,
-    file: ART_TAG_DATA_FILE,
 
-    documentMode: allInOne,
+    files: dataPath =>
+      Promise.allSettled([
+        readFile(path.join(dataPath, ART_TAG_DATA_FILE))
+          .then(() => [ART_TAG_DATA_FILE]),
+
+        traverse(path.join(dataPath, DATA_ART_TAGS_DIRECTORY), {
+          filterFile: name => path.extname(name) === '.yaml',
+          prefixPath: DATA_ART_TAGS_DIRECTORY,
+        }),
+      ]).then(results => results
+          .filter(({status}) => status === 'fulfilled')
+          .flatMap(({value}) => value)),
+
+    documentMode: allTogether,
     documentThing: ArtTag,
 
     save: (results) => ({artTagData: results}),

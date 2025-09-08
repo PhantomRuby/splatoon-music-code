@@ -4,11 +4,9 @@ import {
   anyOf,
   is,
   isBoolean,
-  isObject,
   isStringNonEmpty,
   looseArrayOf,
   optional,
-  validateAllPropertyValues,
   validateArrayItems,
   validateInstanceOf,
   validateProperties,
@@ -32,6 +30,9 @@ export const externalLinkContexts = [
   'generic',
   'group',
   'track',
+
+  'composerRelease',
+  'officialRelease',
 ];
 
 export const isExternalLinkContext =
@@ -252,6 +253,30 @@ export const externalLinkSpec = [
     platform: 'bandcamp',
     handle: {domain: /.+/},
     unusualDomain: true,
+
+    icon: 'bandcamp',
+  },
+
+  {
+    match: {
+      domain: '.bandcamp.com',
+      context: 'composerRelease',
+    },
+
+    platform: 'bandcamp.composerRelease',
+    handle: {domain: /^[^.]+/},
+
+    icon: 'bandcamp',
+  },
+
+  {
+    match: {
+      domain: '.bandcamp.com',
+      context: 'officialRelease',
+    },
+
+    platform: 'bandcamp.officialRelease',
+    handle: {domain: /^[^.]+/},
 
     icon: 'bandcamp',
   },
@@ -554,6 +579,17 @@ export const externalLinkSpec = [
     match: {domain: 'poetryfoundation.org'},
     platform: 'poetryFoundation',
     icon: 'globe',
+  },
+
+  {
+    match: {domains: ['reddit.com', 'old.reddit.com']},
+    platform: 'reddit',
+    icon: 'globe',
+
+    detail: {
+      substring: 'subreddit',
+      subreddit: {pathname: /^r\/[^\/]+(?=\/)?/},
+    },
   },
 
   {

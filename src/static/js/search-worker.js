@@ -130,7 +130,7 @@ async function loadDatabase() {
 
   try {
     idb = await promisifyIDBRequest(request);
-  } catch (error) {
+  } catch {
     console.warn(`Couldn't load search IndexedDB - won't use an internal cache.`);
     console.warn(request.error);
     idb = null;
@@ -391,6 +391,8 @@ function performSearchAction({query, options}) {
 }
 
 const interestingFieldCombinations = [
+  ['primaryName'],
+
   ['primaryName', 'parentName', 'groups'],
   ['primaryName', 'parentName'],
   ['primaryName', 'groups', 'contributors'],
@@ -412,7 +414,6 @@ const interestingFieldCombinations = [
   ['contributors', 'parentName'],
   ['contributors', 'groups'],
   ['primaryName', 'contributors'],
-  ['primaryName'],
 ];
 
 function queryGenericIndex(query, options) {

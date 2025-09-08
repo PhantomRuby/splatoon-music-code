@@ -368,7 +368,11 @@ releaseInfo:
 
   readCommentary:
     _: "Read {LINK}."
-    link: "artist commentary"
+
+    link:
+      _: "artist commentary"
+      withWikiCommentary: "artist and wiki commentary"
+      onlyWikiCommentary: "wiki commentary"
 
   readCreditingSources:
     _: "Read {LINK}."
@@ -492,7 +496,16 @@ misc:
   # artistCommentary:
 
   artistCommentary:
-    _: "Artist commentary:"
+    _: "Artist commentary for {THING}:"
+    sticky: "Artist commentary:"
+
+    withWikiCommentary:
+      _: "Artist and wiki commentary for {THING}:"
+      sticky: "Artist and wiki commentary:"
+
+    onlyWikiCommentary:
+      _: "Wiki commentary for {THING}:"
+      sticky: "Wiki commentary:"
 
     entry:
       title:
@@ -519,13 +532,10 @@ misc:
 
     info:
       fromMainRelease: >-
-        This commentary is properly placed on this track's main release, {ALBUM}.
+        The following commentary is properly placed on this track's main release, {ALBUM}.
 
       fromMainRelease.namedDifferently: >-
-        This commentary is properly placed on this track's main release, {ALBUM}, where it's named {NAME}.
-
-      releaseSpecific: >-
-        This commentary is specific to this release, {ALBUM}.
+        The following commentary is properly placed on this track's main release, {ALBUM}, where it's named {NAME}.
 
       seeSpecificReleases: >-
         For release-specific commentary, check out: {ALBUMS}.
@@ -566,6 +576,10 @@ misc:
     noExternalLinkPlatformName: "Other"
 
     chronology:
+      heading:
+        artistReleases: "Releases by {ARTIST}:"
+        artistTracks: "Tracks by {ARTIST}:"
+
       previous:
         symbol: "←"
         info:
@@ -583,6 +597,7 @@ misc:
         bannerArt: "banner art"
         coverArt: "cover art"
         flash: "flash"
+        release: "release"
         track: "track"
         trackArt: "track art"
         trackContribution: "track contribution"
@@ -623,7 +638,8 @@ misc:
       onlyIndex: "Only"
 
   creditingSources:
-    _: "Crediting sources:"
+    _: "Crediting sources for {THING}:"
+    sticky: "Crediting sources:"
 
   # external:
   #   Links which will generally bring you somewhere off of the wiki.
@@ -651,7 +667,12 @@ misc:
     amazonMusic: "Amazon Music"
     appleMusic: "Apple Music"
     artstation: "ArtStation"
-    bandcamp: "Bandcamp"
+
+    bandcamp:
+      _: "Bandcamp"
+
+      composerRelease: "Bandcamp (composer's release)"
+      officialRelease: "Bandcamp (official release)"
 
     bgreco:
       _: "bgreco.net"
@@ -698,6 +719,11 @@ misc:
     nintendoMusic: "Nintendo Music"
     patreon: "Patreon"
     poetryFoundation: "Poetry Foundation"
+
+    reddit:
+      _: "Reddit"
+      subreddit: "Reddit ({SUBREDDIT})"
+
     soundcloud: "SoundCloud"
     spotify: "Spotify"
     steam: "Steam"
@@ -785,8 +811,10 @@ misc:
   nav:
     previous: "Previous"
     next: "Next"
+
     info: "Info"
     gallery: "Gallery"
+    rollingWindow: "Rolling Window"
 
   # pageTitle:
   #   Title set under the page's <title> HTML element, which is
@@ -834,6 +862,11 @@ misc:
       artist: "(artist)"
       group: "(group)"
 
+    resultDisambiguator:
+      group: "({DISAMBIGUATOR})"
+      flash: "(in {DISAMBIGUATOR})"
+      track: "(from {DISAMBIGUATOR})"
+
     resultFilter:
       album: "Albums"
       artTag: "Art Tags"
@@ -843,7 +876,8 @@ misc:
       track: "Tracks"
 
   referencingSources:
-    _: "Referencing sources:"
+    _: "Referencing sources for {THING}:"
+    sticky: "Referencing sources:"
 
   # skippers:
   #
@@ -978,7 +1012,21 @@ misc:
   #   that thing.
 
   coverGrid:
+    revealAll:
+      reveal: "Reveal all artworks"
+      conceal: "Conceal all artworks"
+      warnings: "In this gallery: {WARNINGS}"
+
+    expandCollapseCue: "({CUE})"
+    expand: "Show the rest!"
+    collapse: "Collapse these"
+
     noCoverArt: "{ALBUM}"
+
+    tab:
+      groups: "{GROUPS}"
+      artists: "{ARTISTS}"
+      artists.featuring: "{ARTISTS} feat. {FEATURING}"
 
     details:
       notFromThisGroup: "{NAME}{MARKER}"
@@ -987,13 +1035,12 @@ misc:
       accent: "({DETAILS})"
 
       albumLength: "{TRACKS}, {TIME}"
+      albumLength.single: "single, {TIME}"
 
       coverArtists: "Artwork by {ARTISTS}"
       coverArtists.customLabel: "{LABEL} by {ARTISTS}"
 
       otherCoverArtists: "With {ARTISTS}"
-
-    expandCollapseCue: "({CUE})"
 
   albumGalleryGrid:
     noCoverArt: "{NAME}"
@@ -1153,6 +1200,9 @@ albumGalleryPage:
 
   statsLine.withDate: >-
     {TRACKS} totaling {DURATION}. Released {DATE}.
+
+  statsLine.withDate.noDuration: >-
+    Released {DATE}.
 
   # coverArtistsLine:
   #   This is displayed if every track (which has artwork at all)
@@ -1330,6 +1380,16 @@ artistPage:
       flash:
         _: "{FLASH}"
 
+      artwork.accent:
+        withLabel: >-
+          {LABEL}
+
+        withAnnotation: >-
+          {ANNOTATION}
+
+        withLabel.withAnnotation: >-
+          {LABEL}: {ANNOTATION}
+
   # contributedDurationLine:
   #   This is shown at the top of the artist's track list, provided
   #   any of their tracks have durations at all.
@@ -1401,6 +1461,41 @@ artistGalleryPage:
 
   infoLine: >-
     Contributed to {COVER_ARTS}.
+
+artistRollingWindowPage:
+  title: "{ARTIST} - Rolling Window"
+
+  windowConfigurationLine: >-
+    With a rolling window of {TIME_BEFORE} before a given date, and {TIME_AFTER} after, peeking ahead {PEEK}...
+
+  contributionConfigurationLine: >-
+    Selecting {KIND} contributions from group {GROUP}...
+
+  timeframeSelectionLine:
+    _: >-
+      There are {CONTRIBUTIONS} contributions, making {TIMEFRAMES} timeframes between {FIRST_DATE} and {LAST_DATE}.
+    none: >-
+      There aren't any matching contributions, or those which do aren't dated, so there are no timeframes.
+
+  emptyTimeframeLine: >-
+    This timeframe is empty, since no contributions are in range.
+
+  timeframeSelectionControl:
+    _: "{PREVIOUS} {TIMEFRAMES} {NEXT}"
+    previous: "← Previous"
+    next: "Next →"
+
+  contributionKind:
+    artwork: "Artwork"
+    music: "Music"
+    flash: "Flash"
+
+  contributionGroup:
+    all: "All groups"
+    group: "{GROUP}"
+
+  timeframe:
+    months: "{INPUT} months"
 
 #
 # artTagPage:
@@ -1684,6 +1779,17 @@ groupGalleryPage:
     bySeries: "By series"
     byDate: "By date"
 
+  albumStyleSwitcher:
+    _: "Showing these releases:"
+
+    album: "Albums"
+    single: "Singles"
+
+    count:
+      all: "all {TOTAL}"
+      filtered: "{COUNT} of {TOTAL}"
+      none: "none at all"
+
   albumsByDate:
     title: "All albums"
 
@@ -1702,12 +1808,6 @@ groupGalleryPage:
 
     caption.seriesAlbumsNotFromGroup: >-
       Albums marked {MARKER} are part of {SERIES}, but not from {GROUP}.
-
-    expand: >-
-      Show the rest!
-
-    collapse: >-
-      Collapse these
 
 #
 # listingIndex:
@@ -1800,6 +1900,7 @@ listingPage:
       title: "Albums - by Tracks"
       title.short: "...by Tracks"
       item: "{ALBUM} ({TRACKS})"
+      item.single: "{ALBUM} ({TRACKS}—single)"
 
     # listAlbums.byDuration:
     #   Lists albums by total duration of all tracks, longest to
@@ -2236,6 +2337,23 @@ listingPage:
         title.withDate: "{ALBUM} ({DATE})"
         item: "{TRACK}"
 
+    # listTracks.needingLyrics:
+    #   List tracks, chunked by album (which are sorted by date,
+    #   falling back alphabetically) and in their usual track order,
+    #   displaying only tracks which are marked as needing lyrics.
+    #   The chunk titles also display the date each album was released,
+    #   and tracks' own custom "Date First Released" fields are totally
+    #   ignored.
+
+    needingLyrics:
+      title: "Tracks - which need Lyrics"
+      title.short: "...which need Lyrics"
+
+      chunk:
+        title: "{ALBUM}"
+        title.withDate: "{ALBUM} ({DATE})"
+        item: "{TRACK}"
+
   other:
 
     # other.allSheetMusic:
@@ -2447,6 +2565,8 @@ trackPage:
 
     backToTrack: "Return to track page"
 
+    singleAccent: "single"
+
     track:
       _: "{TRACK}"
       withNumber: "{NUMBER}. {TRACK}"
@@ -2456,6 +2576,9 @@ trackPage:
         title: "Chronology links {SCOPE}"
         wiki: "across this wiki"
         album: "within this album"
+
+  needsLyrics: >-
+    This track has vocals, but there aren't lyrics available for it on this wiki, yet!
 
   socialEmbed:
     heading: "{ALBUM}"

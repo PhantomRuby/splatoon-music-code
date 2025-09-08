@@ -22,6 +22,7 @@ import {
   reorderDocumentsInYAMLSourceText,
 } from '#yaml';
 
+import {exposeConstant} from '#composite/control-flow';
 import {flag} from '#composite/wiki-properties';
 
 function isSelectFollowingEntry(value) {
@@ -47,6 +48,14 @@ export class SortingRule extends Thing {
       flags: {update: true, expose: true},
       update: {validate: isStringNonEmpty},
     },
+
+    // Expose only
+
+    isSortingRule: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = {
@@ -119,6 +128,14 @@ export class ThingSortingRule extends SortingRule {
         validate: strictArrayOf(isStringNonEmpty),
       },
     },
+
+    // Expose only
+
+    isThingSortingRule: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = Thing.extendDocumentSpec(SortingRule, {
@@ -218,6 +235,14 @@ export class DocumentSortingRule extends ThingSortingRule {
       flags: {update: true, expose: true},
       update: {validate: isStringNonEmpty},
     },
+
+    // Expose only
+
+    isDocumentSortingRule: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = Thing.extendDocumentSpec(ThingSortingRule, {

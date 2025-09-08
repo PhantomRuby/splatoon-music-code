@@ -2,8 +2,8 @@ import {empty, stitchArrays} from '#sugar';
 
 export default {
   contentDependencies: [
+    'generateCommentaryContentHeading',
     'generateCommentaryEntry',
-    'generateContentHeading',
     'linkAlbum',
     'linkTrack',
   ],
@@ -18,8 +18,8 @@ export default {
   }),
 
   relations: (relation, query, track) => ({
-    contentHeading:
-      relation('generateContentHeading'),
+    commentaryContentHeading:
+      relation('generateCommentaryContentHeading', track),
 
     mainReleaseTrackLink:
       (track.isSecondaryRelease
@@ -28,7 +28,7 @@ export default {
 
     mainReleaseArtistCommentaryEntries:
       (track.isSecondaryRelease
-        ? track.mainReleaseTrack.commentary
+        ? track.commentaryFromMainRelease
             .map(entry => relation('generateCommentaryEntry', entry))
         : null),
 
@@ -78,54 +78,40 @@ export default {
   generate: (data, relations, {html, language}) =>
     language.encapsulate('misc.artistCommentary', capsule =>
       html.tags([
-        relations.contentHeading.clone()
-          .slots({
-            attributes: {id: 'artist-commentary'},
-            title: language.$('misc.artistCommentary'),
-          }),
+        relations.commentaryContentHeading,
+        relations.artistCommentaryEntries,
 
         data.isSecondaryRelease &&
-          html.tags([
-            html.tag('p', {class: ['drop', 'commentary-drop']},
-              {[html.onlyIfSiblings]: true},
+          html.tag('div', {class: 'inherited-commentary-section'},
+            {[html.onlyIfContent]: true},
 
-              language.encapsulate(capsule, 'info.fromMainRelease', workingCapsule => {
-                const workingOptions = {};
+            [
+              html.tag('p', {class: ['drop', 'commentary-drop']},
+                {[html.onlyIfSiblings]: true},
 
-                workingOptions.album =
-                  relations.mainReleaseTrackLink.slots({
-                    content:
-                      data.mainReleaseAlbumName,
+                language.encapsulate(capsule, 'info.fromMainRelease', workingCapsule => {
+                  const workingOptions = {};
 
-                    color:
-                      data.mainReleaseAlbumColor,
-                  });
+                  workingOptions.album =
+                    relations.mainReleaseTrackLink.slots({
+                      content:
+                        data.mainReleaseAlbumName,
 
-                if (data.name !== data.mainReleaseName) {
-                  workingCapsule += '.namedDifferently';
-                  workingOptions.name =
-                    html.tag('i', data.mainReleaseName);
-                }
+                      color:
+                        data.mainReleaseAlbumColor,
+                    });
 
-                return language.$(workingCapsule, workingOptions);
-              })),
+                  if (data.name !== data.mainReleaseName) {
+                    workingCapsule += '.namedDifferently';
+                    workingOptions.name =
+                      html.tag('i', data.mainReleaseName);
+                  }
 
-            relations.mainReleaseArtistCommentaryEntries,
-          ]),
+                  return language.$(workingCapsule, workingOptions);
+                })),
 
-        html.tags([
-          data.isSecondaryRelease &&
-          !html.isBlank(relations.mainReleaseArtistCommentaryEntries) &&
-            html.tag('p', {class: ['drop', 'commentary-drop']},
-              {[html.onlyIfSiblings]: true},
-
-              language.$(capsule, 'info.releaseSpecific', {
-                album:
-                  relations.thisReleaseAlbumLink,
-              })),
-
-          relations.artistCommentaryEntries,
-        ]),
+              relations.mainReleaseArtistCommentaryEntries,
+            ]),
 
         html.tag('p', {class: ['drop', 'commentary-drop']},
           {[html.onlyIfContent]: true},

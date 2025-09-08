@@ -162,7 +162,6 @@ import {
 
 import dimensionsOf from 'image-size';
 
-import CacheableObject from '#cacheable-object';
 import {stringifyCache} from '#cli';
 import {commandExists, isMain, promisifyProcess, traverse} from '#node-utils';
 import {sortByName} from '#sort';
@@ -447,7 +446,7 @@ async function getImageMagickVersion(binary) {
 
   try {
     await promisifyProcess(proc, false);
-  } catch (error) {
+  } catch {
     return null;
   }
 
@@ -556,42 +555,56 @@ async function determineThumbtacksNeededForFile({
   return mismatchedWithinRightSize;
 }
 
-async function generateImageThumbnail(imagePath, thumbtack, {
+// Write all requested thumbtacks for a source image in one pass
+// This saves a lot of disk reads which are probably the main bottleneck
+function prepareConvertArgs(filePathInMedia, dirnameInCache, thumbtacks) {
+  const args = [filePathInMedia, '-strip'];
+
+  const basename =
+    path.basename(filePathInMedia, path.extname(filePathInMedia));
+
+  // do larger sizes first
+  thumbtacks.sort((a, b) => thumbnailSpec[b].size - thumbnailSpec[a].size);
+
+  for (const tack of thumbtacks) {
+    const {size, quality} = thumbnailSpec[tack];
+    const filename = `${basename}.${tack}.jpg`;
+    const filePathInCache = path.join(dirnameInCache, filename);
+    args.push(
+      '(', '+clone',
+      '-resize', `${size}x${size}>`,
+      '-interlace', 'Plane',
+      '-quality', `${quality}%`,
+      '-write', filePathInCache,
+      '+delete', ')',
+    );
+  }
+
+  // throw away the (already written) image stream
+  args.push('null:');
+
+  return args;
+}
+
+async function generateImageThumbnails(imagePath, thumbtacks, {
   mediaPath,
   mediaCachePath,
   spawnConvert,
 }) {
+  if (empty(thumbtacks)) return;
+
   const filePathInMedia =
     path.join(mediaPath, imagePath);
 
   const dirnameInCache =
     path.join(mediaCachePath, path.dirname(imagePath));
 
-  const filename =
-    path.basename(imagePath, path.extname(imagePath)) +
-    `.${thumbtack}.jpg`;
-
-  const filePathInCache =
-    path.join(dirnameInCache, filename);
-
   await mkdir(dirnameInCache, {recursive: true});
 
-  const specEntry = thumbnailSpec[thumbtack];
-  const {size, quality} = specEntry;
+  const convertArgs =
+    prepareConvertArgs(filePathInMedia, dirnameInCache, thumbtacks);
 
-  const convertProcess = spawnConvert([
-    filePathInMedia,
-    '-strip',
-    '-resize',
-    `${size}x${size}>`,
-    '-interlace',
-    'Plane',
-    '-quality',
-    `${quality}%`,
-    filePathInCache,
-  ]);
-
-  await promisifyProcess(convertProcess, false);
+  await promisifyProcess(spawnConvert(convertArgs), false);
 }
 
 export async function determineMediaCachePath({
@@ -628,7 +641,7 @@ export async function determineMediaCachePath({
   try {
     const files = await readdir(mediaPath);
     mediaIncludesThumbnailCache = files.includes(CACHE_FILE);
-  } catch (error) {
+  } catch {
     mediaIncludesThumbnailCache = false;
   }
 
@@ -861,7 +874,7 @@ export async function migrateThumbsIntoDedicatedCacheDirectory({
         path.join(mediaPath, CACHE_FILE),
         path.join(mediaCachePath, CACHE_FILE));
       logInfo`Moved thumbnail cache file.`;
-    } catch (error) {
+    } catch {
       logWarn`Failed to move cache file. (${CACHE_FILE})`;
       logWarn`Check its permissions, or try copying/pasting.`;
     }
@@ -1100,33 +1113,23 @@ export default async function genThumbs({
   const writeMessageFn = () =>
     `Writing image thumbnails. [failed: ${numFailed}]`;
 
-  const generateCallImageIndices =
-    imageThumbtacksNeeded
-      .flatMap(({length}, index) =>
-        Array.from({length}, () => index));
-
-  const generateCallImagePaths =
-    generateCallImageIndices
-      .map(index => imagePaths[index]);
-
-  const generateCallThumbtacks =
-    imageThumbtacksNeeded.flat();
-
   const generateCallFns =
     stitchArrays({
-      imagePath: generateCallImagePaths,
-      thumbtack: generateCallThumbtacks,
-    }).map(({imagePath, thumbtack}) => () =>
-        generateImageThumbnail(imagePath, thumbtack, {
+      imagePath: imagePaths,
+      thumbtacks: imageThumbtacksNeeded,
+    }).map(({imagePath, thumbtacks}) => () =>
+        generateImageThumbnails(imagePath, thumbtacks, {
           mediaPath,
           mediaCachePath,
           spawnConvert,
         }).catch(error => {
             numFailed++;
-            return ({error});
+            return {error};
           }));
 
-  logInfo`Generating ${generateCallFns.length} thumbnails for ${imagePaths.length} media files.`;
+  const totalThumbs = imageThumbtacksNeeded.reduce((sum, tacks) => sum + tacks.length, 0);
+
+  logInfo`Generating ${totalThumbs} thumbnails for ${imagePaths.length} media files.`;
   if (generateCallFns.length > 500) {
     logInfo`Go get a latte - this could take a while!`;
   }
@@ -1135,37 +1138,30 @@ export default async function genThumbs({
     await progressPromiseAll(writeMessageFn,
       queue(generateCallFns, magickThreads));
 
-  let successfulIndices;
+  let successfulPaths;
 
   {
-    const erroredIndices = generateCallImageIndices.slice();
-    const erroredPaths = generateCallImagePaths.slice();
-    const erroredThumbtacks = generateCallThumbtacks.slice();
+    const erroredPaths = imagePaths.slice();
     const errors = generateCallResults.map(result => result?.error);
 
     const {removed} =
       filterMultipleArrays(
-        erroredIndices,
         erroredPaths,
-        erroredThumbtacks,
         errors,
-        (_index, _imagePath, _thumbtack, error) => error);
+        (_imagePath, error) => error);
 
-    successfulIndices = new Set(removed[0]);
-
-    const chunks =
-      chunkMultipleArrays(erroredPaths, erroredThumbtacks, errors,
-        (imagePath, lastImagePath) => imagePath !== lastImagePath);
+    ([successfulPaths] = removed);
 
     // TODO: This should obviously be an aggregate error.
     // ...Just like every other error report here, and those dang aggregates
     // should be constructable from within the queue, rather than after.
-    for (const [[imagePath], thumbtacks, errors] of chunks) {
-      logError`Failed to generate thumbnails for ${imagePath}:`;
-      for (const {thumbtack, error} of stitchArrays({thumbtack: thumbtacks, error: errors})) {
-        logError`- ${thumbtack}: ${error}`;
-      }
-    }
+    stitchArrays({
+      imagePath: erroredPaths,
+      error: errors,
+    }).forEach(({imagePath, error}) => {
+        logError`Failed to generate thumbnails for ${imagePath}:`;
+        logError`- ${error}`;
+      });
 
     if (empty(errors)) {
       logInfo`All needed thumbnails generated successfully - nice!`;
@@ -1179,8 +1175,8 @@ export default async function genThumbs({
     imagePaths,
     imageThumbtacksNeeded,
     imageDimensions,
-    (_imagePath, _thumbtacksNeeded, _dimensions, index) =>
-      successfulIndices.has(index));
+    (imagePath, _thumbtacksNeeded, _dimensions) =>
+      successfulPaths.includes(imagePath));
 
   for (const {
     imagePath,
@@ -1251,6 +1247,11 @@ export function getExpectedImagePaths(mediaPath, {urls, wikiData}) {
         .filter(part => part.asset)
         .map(part =>
           fromRoot.to('media.albumWallpaperPart', album.directory, part.asset))),
+
+    wikiData.wikiInfo.wikiWallpaperParts
+      .filter(part => part.asset)
+      .map(part =>
+        fromRoot.to('media.path', part.asset)),
   ].flat();
 
   sortByName(paths, {getName: path => path});

@@ -1,14 +1,15 @@
-import {compareArrays, empty} from '#sugar';
+import {compareArrays, empty, stitchArrays} from '#sugar';
 
 export default {
   contentDependencies: [
     'generateArtistCreditWikiEditsPart',
     'linkContribution',
+    'transformContent',
   ],
 
   extraDependencies: ['html', 'language'],
 
-  query: (creditContributions, contextContributions) => {
+  query: (creditContributions, contextContributions, _formatText) => {
     const query = {};
 
     const featuringFilter = contribution =>
@@ -52,7 +53,10 @@ export default {
     return query;
   },
 
-  relations: (relation, query, _creditContributions, _contextContributions) => ({
+  relations: (relation, query,
+      _creditContributions,
+      _contextContributions,
+      formatText) => ({
     normalContributionLinks:
       query.normalContributions
         .map(contrib => relation('linkContribution', contrib)),
@@ -64,14 +68,25 @@ export default {
     wikiEditsPart:
       relation('generateArtistCreditWikiEditsPart',
         query.wikiEditContributions),
+
+    formatText:
+      relation('transformContent', formatText),
   }),
 
-  data: (query, _creditContributions, _contextContributions) => ({
+  data: (query, _creditContributions, _contextContributions, _formatText) => ({
     normalContributionArtistsDifferFromContext:
       query.normalContributionArtistsDifferFromContext,
 
     normalContributionAnnotationsDifferFromContext:
       query.normalContributionAnnotationsDifferFromContext,
+
+    normalContributionArtistDirectories:
+      query.normalContributions
+        .map(contrib => contrib.artist.directory),
+
+    featuringContributionArtistDirectories:
+      query.featuringContributions
+        .map(contrib => contrib.artist.directory),
 
     hasWikiEdits:
       !empty(query.wikiEditContributions),
@@ -105,6 +120,10 @@ export default {
   generate(data, relations, slots, {html, language}) {
     if (!slots.normalStringKey) return html.blank();
 
+    const effectivelyDiffers =
+      (slots.showAnnotation && data.normalContributionAnnotationsDifferFromContext) ||
+      (data.normalContributionArtistsDifferFromContext);
+
     for (const link of [
       ...relations.normalContributionLinks,
       ...relations.featuringContributionLinks,
@@ -132,63 +151,112 @@ export default {
       });
     }
 
-    if (empty(relations.normalContributionLinks)) {
-      return html.blank();
+    let formattedArtistList = null;
+
+    if (!html.isBlank(relations.formatText)) {
+      formattedArtistList = relations.formatText;
+
+      const substituteContrib = ({link, directory}) => ({
+        match: {replacerKey: 'artist', replacerValue: directory},
+        substitute: link,
+
+        apply(link, node) {
+          if (node.data.label) {
+            link.setSlot('content', language.sanitize(node.data.label));
+          }
+        },
+      });
+
+      relations.formatText.setSlots({
+        mode: 'inline',
+
+        substitute: [
+          stitchArrays({
+            link: relations.normalContributionLinks,
+            directory: data.normalContributionArtistDirectories,
+          }).map(substituteContrib),
+
+          stitchArrays({
+            link: relations.featuringContributionLinks,
+            directory: data.featuringContributionArtistDirectories,
+          }).map(substituteContrib),
+        ].flat(),
+      });
     }
 
-    const artistsList =
-      (data.hasWikiEdits && slots.showWikiEdits
-        ? language.$('misc.artistLink.withEditsForWiki', {
-            artists:
-              language.formatConjunctionList(relations.normalContributionLinks),
+    let content;
 
-            edits:
-              relations.wikiEditsPart.slots({
-                showAnnotation: slots.showAnnotation,
-              }),
-          })
-        : language.formatConjunctionList(relations.normalContributionLinks));
-
-    const featuringList =
-      language.formatConjunctionList(relations.featuringContributionLinks);
-
-    const everyoneList =
-      language.formatConjunctionList([
-        ...relations.normalContributionLinks,
-        ...relations.featuringContributionLinks,
-      ]);
-
-    const effectivelyDiffers =
-      (slots.showAnnotation && data.normalContributionAnnotationsDifferFromContext) ||
-      (data.normalContributionArtistsDifferFromContext);
-
-    if (empty(relations.featuringContributionLinks)) {
+    if (formattedArtistList) {
       if (effectivelyDiffers) {
-        return language.$(slots.normalStringKey, {
-          ...slots.additionalStringOptions,
-          artists: artistsList,
-        });
-      } else {
+        content =
+          language.$(slots.normalStringKey, {
+            ...slots.additionalStringOptions,
+            artists: formattedArtistList,
+          });
+      }
+    } else {
+      if (empty(relations.normalContributionLinks)) {
         return html.blank();
+      }
+
+      const artistsList =
+        (data.hasWikiEdits && slots.showWikiEdits
+          ? language.$('misc.artistLink.withEditsForWiki', {
+              artists:
+                language.formatConjunctionList(relations.normalContributionLinks),
+
+              edits:
+                relations.wikiEditsPart.slots({
+                  showAnnotation: slots.showAnnotation,
+                }),
+            })
+
+          : language.formatConjunctionList(relations.normalContributionLinks));
+
+      const featuringList =
+        language.formatConjunctionList(relations.featuringContributionLinks);
+
+      const everyoneList =
+        language.formatConjunctionList([
+          ...relations.normalContributionLinks,
+          ...relations.featuringContributionLinks,
+        ]);
+
+      if (empty(relations.featuringContributionLinks)) {
+        if (effectivelyDiffers) {
+          content =
+            language.$(slots.normalStringKey, {
+              ...slots.additionalStringOptions,
+              artists: artistsList,
+            });
+        } else {
+          return html.blank();
+        }
+      } else if (effectivelyDiffers && slots.normalFeaturingStringKey) {
+        content =
+          language.$(slots.normalFeaturingStringKey, {
+            ...slots.additionalStringOptions,
+            artists: artistsList,
+            featuring: featuringList,
+        });
+      } else if (slots.featuringStringKey) {
+        content =
+          language.$(slots.featuringStringKey, {
+            ...slots.additionalStringOptions,
+            artists: featuringList,
+          });
+      } else {
+        content =
+          language.$(slots.normalStringKey, {
+            ...slots.additionalStringOptions,
+            artists: everyoneList,
+          });
       }
     }
 
-    if (effectivelyDiffers && slots.normalFeaturingStringKey) {
-      return language.$(slots.normalFeaturingStringKey, {
-        ...slots.additionalStringOptions,
-        artists: artistsList,
-        featuring: featuringList,
-      });
-    } else if (slots.featuringStringKey) {
-      return language.$(slots.featuringStringKey, {
-        ...slots.additionalStringOptions,
-        artists: featuringList,
-      });
-    } else {
-      return language.$(slots.normalStringKey, {
-        ...slots.additionalStringOptions,
-        artists: everyoneList,
-      });
-    }
+    // TODO: This is obviously evil.
+    return (
+      html.metatag('chunkwrap', {split: /,| (?=and)/},
+        html.resolve(content)));
   },
 };

@@ -2,13 +2,12 @@ import {input} from '#composite';
 import Thing from '#thing';
 import {isString, validateArrayItems} from '#validators';
 
-import {contentString, simpleString, thing} from '#composite/wiki-properties';
-
 import {exposeConstant, exposeUpdateValueOrContinue}
   from '#composite/control-flow';
+import {contentString, simpleString, thing} from '#composite/wiki-properties';
 
 export class AdditionalFile extends Thing {
-  static [Thing.getPropertyDescriptors] = ({}) => ({
+  static [Thing.getPropertyDescriptors] = () => ({
     // Update & expose
 
     thing: thing(),
@@ -24,6 +23,14 @@ export class AdditionalFile extends Thing {
 
       exposeConstant({
         value: input.value([]),
+      }),
+    ],
+
+    // Expose only
+
+    isAdditionalFile: [
+      exposeConstant({
+        value: input.value(true),
       }),
     ],
   });

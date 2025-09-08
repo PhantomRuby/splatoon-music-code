@@ -1,5 +1,6 @@
 import {basename} from 'node:path';
 
+import {logWarn} from '#cli';
 import {bindFind} from '#find';
 import {replacerSpec, parseContentNodes} from '#replacer';
 
@@ -62,20 +63,30 @@ export default {
       Object.values(replacerSpec)
         .map(description => description.link)
         .filter(Boolean)),
+
     'image',
     'generateTextWithTooltip',
     'generateTooltip',
     'linkExternal',
   ],
 
-  extraDependencies: ['html', 'language', 'to', 'wikiData'],
+  extraDependencies: [
+    'html',
+    'language',
+    'niceShowAggregate',
+    'to',
+    'wikiData',
+  ],
 
   sprawl(wikiData, content) {
-    const find = bindFind(wikiData);
+    const find = bindFind(wikiData, {mode: 'quiet'});
 
-    const parsedNodes = parseContentNodes(content ?? '');
+    const {result: parsedNodes, error} =
+      parseContentNodes(content ?? '', {errorMode: 'return'});
 
     return {
+      error,
+
       nodes: parsedNodes
         .map(node => {
           if (node.type !== 'tag') {
@@ -98,7 +109,7 @@ export default {
           }
 
           if (spec.link) {
-            let data = {link: spec.link};
+            let data = {link: spec.link, replacerKey, replacerValue};
 
             determineData: {
               // No value at all: this is an index link.
@@ -177,8 +188,8 @@ export default {
             ...node,
             data: {
               ...node.data,
-              replacerKey: node.data.replacerKey.data,
-              replacerValue: node.data.replacerValue[0].data,
+              replacerKey,
+              replacerValue,
             },
           };
         }),
@@ -189,25 +200,11 @@ export default {
     return {
       content,
 
-      nodes:
-        sprawl.nodes
-          .map(node => {
-            switch (node.type) {
-              // Replace internal link nodes with a stub. It'll be replaced
-              // (by position) with an item from relations.
-              //
-              // TODO: This should be where label and hash get passed through,
-              // rather than in relations... (in which case there's no need to
-              // handle it specially here, and we can really just return
-              // data.nodes = sprawl.nodes)
-              case 'internal-link':
-                return {type: 'internal-link'};
+      error:
+        sprawl.error,
 
-              // Other nodes will get processed in generate.
-              default:
-                return node;
-            }
-          }),
+      nodes:
+        sprawl.nodes,
     };
   },
 
@@ -299,15 +296,53 @@ export default {
       validate: v => v.is('small', 'medium', 'large'),
       default: 'large',
     },
+
+    substitute: {
+      validate: v =>
+        v.strictArrayOf(
+          v.validateProperties({
+            match: v.validateProperties({
+              replacerKey: v.isString,
+              replacerValue: v.isString,
+            }),
+
+            substitute: v.isHTML,
+
+            apply: v.optional(v.isFunction),
+          })),
+    },
   },
 
-  generate(data, relations, slots, {html, language, to}) {
+  generate(data, relations, slots, {html, language, niceShowAggregate, to}) {
+    if (data.error) {
+      logWarn`Error in content text.`;
+      niceShowAggregate(data.error);
+    }
+
     let imageIndex = 0;
     let internalLinkIndex = 0;
     let externalLinkIndex = 0;
     let externalLinkForTooltipNodeIndex = 0;
 
     let offsetTextNode = 0;
+
+    const substitutions =
+      (slots.substitute
+        ? slots.substitute.slice()
+        : []);
+
+    const pickSubstitution = node => {
+      const index =
+        substitutions.findIndex(({match}) =>
+          match.replacerKey === node.data.replacerKey &&
+          match.replacerValue === node.data.replacerValue);
+
+      if (index === -1) {
+        return null;
+      }
+
+      return substitutions.splice(index, 1).at(0);
+    };
 
     const contentFromNodes =
       data.nodes.map((node, index) => {
@@ -326,6 +361,25 @@ export default {
             offsetTextNode = suffix.length;
           }
         };
+
+        const substitution = pickSubstitution(node);
+
+        if (substitution) {
+          const source =
+            substitution.substitute;
+
+          let substitute = source;
+
+          if (substitution.apply) {
+            const result = substitution.apply(source, node);
+
+            if (result !== undefined) {
+              substitute = result;
+            }
+          }
+
+          return {type: 'substitution', data: substitute};
+        }
 
         switch (node.type) {
           case 'text': {
@@ -360,9 +414,8 @@ export default {
                   height && {height},
                   style && {style},
 
-                  align === 'center' &&
-                  !link &&
-                    {class: 'align-center'},
+                  align && !link &&
+                    {class: 'align-' + align},
 
                   pixelate &&
                     {class: 'pixelate'});
@@ -373,8 +426,8 @@ export default {
                     {href: link},
                     {target: '_blank'},
 
-                    align === 'center' &&
-                      {class: 'align-center'},
+                    align &&
+                      {class: 'align-' + align},
 
                     {title:
                       language.encapsulate('misc.external.opensInNewTab', capsule =>
@@ -424,8 +477,8 @@ export default {
               inline: false,
               data:
                 html.tag('div', {class: 'content-image-container'},
-                  align === 'center' &&
-                    {class: 'align-center'},
+                  align &&
+                    {class: 'align-' + align},
 
                   image),
             };
@@ -437,22 +490,31 @@ export default {
                 ? to('media.path', node.src.slice('media/'.length))
                 : node.src);
 
-            const {width, height, align, pixelate} = node;
+            const {width, height, align, inline, pixelate} = node;
+
+            const video =
+              html.tag('video',
+                src && {src},
+                width && {width},
+                height && {height},
+
+                {controls: true},
+
+                align && inline &&
+                  {class: 'align-' + align},
+
+                pixelate &&
+                  {class: 'pixelate'});
 
             const content =
-              html.tag('div', {class: 'content-video-container'},
-                align === 'center' &&
-                  {class: 'align-center'},
+              (inline
+                ? video
+                : html.tag('div', {class: 'content-video-container'},
+                    align &&
+                      {class: 'align-' + align},
 
-                html.tag('video',
-                  src && {src},
-                  width && {width},
-                  height && {height},
+                    video));
 
-                  {controls: true},
-
-                  pixelate &&
-                    {class: 'pixelate'}));
 
             return {
               type: 'processed-video',
@@ -466,15 +528,14 @@ export default {
                 ? to('media.path', node.src.slice('media/'.length))
                 : node.src);
 
-            const {align, inline} = node;
+            const {align, inline, nameless} = node;
 
             const audio =
               html.tag('audio',
                 src && {src},
 
-                align === 'center' &&
-                inline &&
-                  {class: 'align-center'},
+                align && inline &&
+                  {class: 'align-' + align},
 
                 {controls: true});
 
@@ -482,13 +543,14 @@ export default {
               (inline
                 ? audio
                 : html.tag('div', {class: 'content-audio-container'},
-                    align === 'center' &&
-                      {class: 'align-center'},
+                    align &&
+                      {class: 'align-' + align},
 
                     [
-                      html.tag('a', {class: 'filename'},
-                        src && {href: src},
-                        language.sanitize(basename(node.src))),
+                      !nameless &&
+                        html.tag('a', {class: 'filename'},
+                          src && {href: src},
+                          language.sanitize(basename(node.src))),
 
                       audio,
                     ]));
@@ -537,7 +599,7 @@ export default {
             try {
               link.getSlotDescription('preferShortName');
               hasPreferShortNameSlot = true;
-            } catch (error) {
+            } catch {
               hasPreferShortNameSlot = false;
             }
 
@@ -550,7 +612,7 @@ export default {
             try {
               link.getSlotDescription('tooltipStyle');
               hasTooltipStyleSlot = true;
-            } catch (error) {
+            } catch {
               hasTooltipStyleSlot = false;
             }
 
@@ -574,8 +636,11 @@ export default {
           }
 
           case 'external-link': {
-            const {label} = node.data;
             const externalLink = relations.externalLinks[externalLinkIndex++];
+
+            const label =
+              node.data.label ??
+              node.data.href.replace(/^https?:\/\//, '');
 
             if (slots.textOnly) {
               return {type: 'text', data: label};

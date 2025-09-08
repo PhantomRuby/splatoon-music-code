@@ -5,10 +5,18 @@ import {colors} from '#cli';
 import {input} from '#composite';
 import {empty} from '#sugar';
 import Thing from '#thing';
-import {isStringNonEmpty, isThing, validateReference} from '#validators';
+import {isBoolean, isStringNonEmpty, isThing, validateReference}
+  from '#validators';
 
-import {exitWithoutDependency, exposeDependency} from '#composite/control-flow';
 import {flag, simpleDate, soupyFind} from '#composite/wiki-properties';
+
+import {
+  exitWithoutDependency,
+  exposeConstant,
+  exposeDependency,
+  exposeDependencyOrContinue,
+  exposeUpdateValueOrContinue,
+} from '#composite/control-flow';
 
 import {
   withFilteredList,
@@ -19,8 +27,6 @@ import {
 
 import {
   inheritFromContributionPresets,
-  thingPropertyMatches,
-  thingReferenceTypeMatches,
   withContainingReverseContributionList,
   withContributionArtist,
   withContributionContext,
@@ -70,7 +76,26 @@ export class Contribution extends Thing {
         property: input.thisProperty(),
       }),
 
-      flag(true),
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      {
+        dependencies: ['thing', input.myself()],
+        compute: (continuation, {
+          ['thing']: thing,
+          [input.myself()]: contribution,
+        }) =>
+          (thing.countOwnContributionInContributionTotals?.(contribution)
+            ? true
+         : thing.countOwnContributionInContributionTotals
+            ? false
+            : continuation()),
+      },
+
+      exposeConstant({
+        value: input.value(true),
+      }),
     ],
 
     countInDurationTotals: [
@@ -78,7 +103,37 @@ export class Contribution extends Thing {
         property: input.thisProperty(),
       }),
 
-      flag(true),
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      withPropertyFromObject({
+        object: 'thing',
+        property: input.value('duration'),
+      }),
+
+      exitWithoutDependency({
+        dependency: '#thing.duration',
+        mode: input.value('falsy'),
+        value: input.value(false),
+      }),
+
+      {
+        dependencies: ['thing', input.myself()],
+        compute: (continuation, {
+          ['thing']: thing,
+          [input.myself()]: contribution,
+        }) =>
+          (thing.countOwnContributionInDurationTotals?.(contribution)
+            ? true
+         : thing.countOwnContributionInDurationTotals
+            ? false
+            : continuation()),
+      },
+
+      exposeConstant({
+        value: input.value(true),
+      }),
     ],
 
     // Update only
@@ -86,6 +141,12 @@ export class Contribution extends Thing {
     find: soupyFind(),
 
     // Expose only
+
+    isContribution: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     context: [
       withContributionContext(),
@@ -167,38 +228,6 @@ export class Contribution extends Thing {
       }),
     ],
 
-    isArtistContribution: thingPropertyMatches({
-      value: input.value('artistContribs'),
-    }),
-
-    isContributorContribution: thingPropertyMatches({
-      value: input.value('contributorContribs'),
-    }),
-
-    isCoverArtistContribution: thingPropertyMatches({
-      value: input.value('coverArtistContribs'),
-    }),
-
-    isBannerArtistContribution: thingPropertyMatches({
-      value: input.value('bannerArtistContribs'),
-    }),
-
-    isWallpaperArtistContribution: thingPropertyMatches({
-      value: input.value('wallpaperArtistContribs'),
-    }),
-
-    isForTrack: thingReferenceTypeMatches({
-      value: input.value('track'),
-    }),
-
-    isForAlbum: thingReferenceTypeMatches({
-      value: input.value('album'),
-    }),
-
-    isForFlash: thingReferenceTypeMatches({
-      value: input.value('flash'),
-    }),
-
     previousBySameArtist: [
       withContainingReverseContributionList().outputs({
         '#containingReverseContributionList': '#list',
@@ -238,6 +267,21 @@ export class Contribution extends Thing {
         dependency: '#nearbyItem',
       }),
     ],
+
+    groups: [
+      withPropertyFromObject({
+        object: 'thing',
+        property: input.value('groups'),
+      }),
+
+      exposeDependencyOrContinue({
+        dependency: '#thing.groups',
+      }),
+
+      exposeConstant({
+        value: input.value([]),
+      }),
+    ],
   });
 
   [inspect.custom](depth, options, inspect) {
@@ -259,7 +303,7 @@ export class Contribution extends Thing {
       let artist;
       try {
         artist = this.artist;
-      } catch (_error) {
+      } catch {
         // Computing artist might crash for any reason - don't distract from
         // other errors as a result of inspecting this contribution.
       }

@@ -4,8 +4,15 @@ import CacheableObject from '#cacheable-object';
 import {colors} from '#cli';
 import {input} from '#composite';
 import Thing from '#thing';
-import {isBoolean, isColor, isContributionList, isDate, isFileExtension}
-  from '#validators';
+
+import {
+  isBoolean,
+  isColor,
+  isContentString,
+  isContributionList,
+  isDate,
+  isFileExtension,
+} from '#validators';
 
 import {
   parseAdditionalFiles,
@@ -22,9 +29,10 @@ import {
   parseLyrics,
 } from '#yaml';
 
-import {withPropertyFromObject} from '#composite/data';
+import {withPropertyFromList, withPropertyFromObject} from '#composite/data';
 
 import {
+  exitWithoutDependency,
   exposeConstant,
   exposeDependency,
   exposeDependencyOrContinue,
@@ -41,7 +49,6 @@ import {
 import {
   commentatorArtists,
   constitutibleArtworkList,
-  contentString,
   contributionList,
   dimensions,
   directory,
@@ -92,13 +99,17 @@ export class Track extends Thing {
     Artwork,
     CommentaryEntry,
     CreditingSourcesEntry,
-    Flash,
     LyricsEntry,
     ReferencingSourcesEntry,
-    TrackSection,
     WikiInfo,
   }) => ({
-    // Update & expose
+    // > Update & expose - Internal relationships
+
+    album: thing({
+      class: input.value(Album),
+    }),
+
+    // > Update & expose - Identifying metadata
 
     name: name('Unnamed Track'),
 
@@ -132,20 +143,107 @@ export class Track extends Thing {
       })
     ],
 
-    album: thing({
-      class: input.value(Album),
-    }),
+    alwaysReferenceByDirectory: [
+      withAlwaysReferenceByDirectory(),
+      exposeDependency({dependency: '#alwaysReferenceByDirectory'}),
+    ],
 
-    additionalNames: thingList({
-      class: input.value(AdditionalName),
+    mainReleaseTrack: singleReference({
+      class: input.value(Track),
+      find: soupyFind.input('track'),
     }),
 
     bandcampTrackIdentifier: simpleString(),
     bandcampArtworkIdentifier: simpleString(),
 
-    duration: duration(),
-    urls: urls(),
+    additionalNames: thingList({
+      class: input.value(AdditionalName),
+    }),
+
     dateFirstReleased: simpleDate(),
+
+    // > Update & expose - Credits and contributors
+
+    artistText: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isContentString),
+      }),
+
+      withPropertyFromAlbum({
+        property: input.value('trackArtistText'),
+      }),
+
+      exposeDependency({
+        dependency: '#album.trackArtistText',
+      }),
+    ],
+
+    artistContribs: [
+      inheritContributionListFromMainRelease(),
+
+      withDate(),
+
+      withResolvedContribs({
+        from: input.updateValue({validate: isContributionList}),
+        thingProperty: input.thisProperty(),
+        artistProperty: input.value('trackArtistContributions'),
+        date: '#date',
+      }).outputs({
+        '#resolvedContribs': '#artistContribs',
+      }),
+
+      exposeDependencyOrContinue({
+        dependency: '#artistContribs',
+        mode: input.value('empty'),
+      }),
+
+      withPropertyFromAlbum({
+        property: input.value('trackArtistContribs'),
+      }),
+
+      withRecontextualizedContributionList({
+        list: '#album.trackArtistContribs',
+        artistProperty: input.value('trackArtistContributions'),
+      }),
+
+      withRedatedContributionList({
+        list: '#album.trackArtistContribs',
+        date: '#date',
+      }),
+
+      exposeDependency({dependency: '#album.trackArtistContribs'}),
+    ],
+
+    contributorContribs: [
+      inheritContributionListFromMainRelease(),
+
+      withDate(),
+
+      contributionList({
+        date: '#date',
+        artistProperty: input.value('trackContributorContributions'),
+      }),
+    ],
+
+    // > Update & expose - General configuration
+
+    countInArtistTotals: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      withPropertyFromAlbum({
+        property: input.value('countTracksInArtistTotals'),
+      }),
+
+      exposeDependency({dependency: '#album.countTracksInArtistTotals'}),
+    ],
+
+    disableUniqueCoverArt: flag(),
+
+    // > Update & expose - General metadata
+
+    duration: duration(),
 
     color: [
       exposeUpdateValueOrContinue({
@@ -168,21 +266,65 @@ export class Track extends Thing {
       exposeDependency({dependency: '#album.color'}),
     ],
 
-    alwaysReferenceByDirectory: [
-      withAlwaysReferenceByDirectory(),
-      exposeDependency({dependency: '#alwaysReferenceByDirectory'}),
+    needsLyrics: [
+      exposeUpdateValueOrContinue({
+        mode: input.value('falsy'),
+        validate: input.value(isBoolean),
+      }),
+
+      exitWithoutDependency({
+        dependency: 'lyrics',
+        mode: input.value('empty'),
+        value: input.value(false),
+      }),
+
+      withPropertyFromList({
+        list: 'lyrics',
+        property: input.value('helpNeeded'),
+      }),
+
+      {
+        dependencies: ['#lyrics.helpNeeded'],
+        compute: ({
+          ['#lyrics.helpNeeded']: helpNeeded,
+        }) =>
+          helpNeeded.includes(true)
+      },
     ],
 
-    // Disables presenting the track as though it has its own unique artwork.
-    // This flag should only be used in select circumstances, i.e. to override
-    // an album's trackCoverArtists. This flag supercedes that property, as well
-    // as the track's own coverArtists.
-    disableUniqueCoverArt: flag(),
+    urls: urls(),
 
-    // File extension for track's corresponding media file. This represents the
-    // track's unique cover artwork, if any, and does not inherit the extension
-    // of the album's main artwork. It does inherit trackCoverArtFileExtension,
-    // if present on the album.
+    // > Update & expose - Artworks
+
+    trackArtworks: [
+      exitWithoutUniqueCoverArt({
+        value: input.value([]),
+      }),
+
+      constitutibleArtworkList.fromYAMLFieldSpec
+        .call(this, 'Track Artwork'),
+    ],
+
+    coverArtistContribs: [
+      withCoverArtistContribs({
+        from: input.updateValue({
+          validate: isContributionList,
+        }),
+      }),
+
+      exposeDependency({dependency: '#coverArtistContribs'}),
+    ],
+
+    coverArtDate: [
+      withTrackArtDate({
+        from: input.updateValue({
+          validate: isDate,
+        }),
+      }),
+
+      exposeDependency({dependency: '#trackArtDate'}),
+    ],
+
     coverArtFileExtension: [
       exitWithoutUniqueCoverArt(),
 
@@ -201,16 +343,6 @@ export class Track extends Thing {
       }),
     ],
 
-    coverArtDate: [
-      withTrackArtDate({
-        from: input.updateValue({
-          validate: isDate,
-        }),
-      }),
-
-      exposeDependency({dependency: '#trackArtDate'}),
-    ],
-
     coverArtDimensions: [
       exitWithoutUniqueCoverArt(),
 
@@ -225,102 +357,26 @@ export class Track extends Thing {
       dimensions(),
     ],
 
-    commentary: thingList({
-      class: input.value(CommentaryEntry),
-    }),
+    artTags: [
+      exitWithoutUniqueCoverArt({
+        value: input.value([]),
+      }),
 
-    creditingSources: thingList({
-      class: input.value(CreditingSourcesEntry),
-    }),
-
-    referencingSources: thingList({
-      class: input.value(ReferencingSourcesEntry),
-    }),
-
-    lyrics: [
-      // TODO: Inherited lyrics are literally the same objects, so of course
-      // their .thing properties aren't going to point back to this one, and
-      // certainly couldn't be recontextualized...
-      inheritFromMainRelease(),
-
-      thingList({
-        class: input.value(LyricsEntry),
+      referenceList({
+        class: input.value(ArtTag),
+        find: soupyFind.input('artTag'),
       }),
     ],
 
-    additionalFiles: thingList({
-      class: input.value(AdditionalFile),
-    }),
-
-    sheetMusicFiles: thingList({
-      class: input.value(AdditionalFile),
-    }),
-
-    midiProjectFiles: thingList({
-      class: input.value(AdditionalFile),
-    }),
-
-    mainReleaseTrack: singleReference({
-      class: input.value(Track),
-      find: soupyFind.input('track'),
-    }),
-
-    artistContribs: [
-      inheritContributionListFromMainRelease(),
-
-      withDate(),
-
-      withResolvedContribs({
-        from: input.updateValue({validate: isContributionList}),
-        thingProperty: input.thisProperty(),
-        artistProperty: input.value('trackArtistContributions'),
-        date: '#date',
-      }).outputs({
-        '#resolvedContribs': '#artistContribs',
+    referencedArtworks: [
+      exitWithoutUniqueCoverArt({
+        value: input.value([]),
       }),
 
-      exposeDependencyOrContinue({
-        dependency: '#artistContribs',
-        mode: input.value('empty'),
-      }),
-
-      withPropertyFromAlbum({
-        property: input.value('artistContribs'),
-      }),
-
-      withRecontextualizedContributionList({
-        list: '#album.artistContribs',
-        artistProperty: input.value('trackArtistContributions'),
-      }),
-
-      withRedatedContributionList({
-        list: '#album.artistContribs',
-        date: '#date',
-      }),
-
-      exposeDependency({dependency: '#album.artistContribs'}),
+      referencedArtworkList(),
     ],
 
-    contributorContribs: [
-      inheritContributionListFromMainRelease(),
-
-      withDate(),
-
-      contributionList({
-        date: '#date',
-        artistProperty: input.value('trackContributorContributions'),
-      }),
-    ],
-
-    coverArtistContribs: [
-      withCoverArtistContribs({
-        from: input.updateValue({
-          validate: isContributionList,
-        }),
-      }),
-
-      exposeDependency({dependency: '#coverArtistContribs'}),
-    ],
+    // > Update & expose - Referenced tracks
 
     referencedTracks: [
       inheritFromMainRelease({
@@ -344,35 +400,46 @@ export class Track extends Thing {
       }),
     ],
 
-    trackArtworks: [
-      exitWithoutUniqueCoverArt({
-        value: input.value([]),
-      }),
+    // > Update & expose - Additional files
 
-      constitutibleArtworkList.fromYAMLFieldSpec
-        .call(this, 'Track Artwork'),
+    additionalFiles: thingList({
+      class: input.value(AdditionalFile),
+    }),
+
+    sheetMusicFiles: thingList({
+      class: input.value(AdditionalFile),
+    }),
+
+    midiProjectFiles: thingList({
+      class: input.value(AdditionalFile),
+    }),
+
+    // > Update & expose - Content entries
+
+    lyrics: [
+      // TODO: Inherited lyrics are literally the same objects, so of course
+      // their .thing properties aren't going to point back to this one, and
+      // certainly couldn't be recontextualized...
+      inheritFromMainRelease(),
+
+      thingList({
+        class: input.value(LyricsEntry),
+      }),
     ],
 
-    artTags: [
-      exitWithoutUniqueCoverArt({
-        value: input.value([]),
-      }),
+    commentary: thingList({
+      class: input.value(CommentaryEntry),
+    }),
 
-      referenceList({
-        class: input.value(ArtTag),
-        find: soupyFind.input('artTag'),
-      }),
-    ],
+    creditingSources: thingList({
+      class: input.value(CreditingSourcesEntry),
+    }),
 
-    referencedArtworks: [
-      exitWithoutUniqueCoverArt({
-        value: input.value([]),
-      }),
+    referencingSources: thingList({
+      class: input.value(ReferencingSourcesEntry),
+    }),
 
-      referencedArtworkList(),
-    ],
-
-    // Update only
+    // > Update only
 
     find: soupyFind(),
     reverse: soupyReverse(),
@@ -392,7 +459,13 @@ export class Track extends Thing {
       class: input.value(WikiInfo),
     }),
 
-    // Expose only
+    // > Expose only
+
+    isTrack: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     commentatorArtists: commentatorArtists(),
 
@@ -444,6 +517,34 @@ export class Track extends Thing {
       exposeDependency({dependency: '#otherReleases'}),
     ],
 
+    commentaryFromMainRelease: [
+      withMainRelease(),
+
+      exitWithoutDependency({
+        dependency: '#mainRelease',
+        value: input.value([]),
+      }),
+
+      withPropertyFromObject({
+        object: '#mainRelease',
+        property: input.value('commentary'),
+      }),
+
+      exposeDependency({
+        dependency: '#mainRelease.commentary',
+      }),
+    ],
+
+    groups: [
+      withPropertyFromAlbum({
+        property: input.value('groups'),
+      }),
+
+      exposeDependency({
+        dependency: '#album.groups',
+      }),
+    ],
+
     referencedByTracks: reverseReferenceList({
       reverse: soupyReverse.input('tracksWhichReference'),
     }),
@@ -459,14 +560,13 @@ export class Track extends Thing {
 
   static [Thing.yamlDocumentSpec] = {
     fields: {
+      // Identifying metadata
+
       'Track': {property: 'name'},
       'Directory': {property: 'directory'},
       'Suffix Directory': {property: 'suffixDirectoryFromAlbum'},
-
-      'Additional Names': {
-        property: 'additionalNames',
-        transform: parseAdditionalNames,
-      },
+      'Always Reference By Directory': {property: 'alwaysReferenceByDirectory'},
+      'Main Release': {property: 'mainReleaseTrack'},
 
       'Bandcamp Track ID': {
         property: 'bandcampTrackIdentifier',
@@ -478,17 +578,79 @@ export class Track extends Thing {
         transform: String,
       },
 
+      'Additional Names': {
+        property: 'additionalNames',
+        transform: parseAdditionalNames,
+      },
+
+      'Date First Released': {
+        property: 'dateFirstReleased',
+        transform: parseDate,
+      },
+
+      // Credits and contributors
+
+      'Artist Text': {
+        property: 'artistText',
+      },
+
+      'Artists': {
+        property: 'artistContribs',
+        transform: parseContributors,
+      },
+
+      'Contributors': {
+        property: 'contributorContribs',
+        transform: parseContributors,
+      },
+
+      // General configuration
+
+      'Count In Artist Totals': {property: 'countInArtistTotals'},
+
+      'Has Cover Art': {
+        property: 'disableUniqueCoverArt',
+        transform: value =>
+          (typeof value === 'boolean'
+            ? !value
+            : value),
+      },
+
+      // General metadata
+
       'Duration': {
         property: 'duration',
         transform: parseDuration,
       },
 
       'Color': {property: 'color'},
+
+      'Needs Lyrics': {
+        property: 'needsLyrics',
+      },
+
       'URLs': {property: 'urls'},
 
-      'Date First Released': {
-        property: 'dateFirstReleased',
-        transform: parseDate,
+      // Artworks
+
+      'Track Artwork': {
+        property: 'trackArtworks',
+        transform:
+          parseArtwork({
+            thingProperty: 'trackArtworks',
+            dimensionsFromThingProperty: 'coverArtDimensions',
+            fileExtensionFromThingProperty: 'coverArtFileExtension',
+            dateFromThingProperty: 'coverArtDate',
+            artTagsFromThingProperty: 'artTags',
+            referencedArtworksFromThingProperty: 'referencedArtworks',
+            artistContribsFromThingProperty: 'coverArtistContribs',
+            artistContribsArtistProperty: 'trackCoverArtistContributions',
+          }),
+      },
+
+      'Cover Artists': {
+        property: 'coverArtistContribs',
+        transform: parseContributors,
       },
 
       'Cover Art Date': {
@@ -503,15 +665,36 @@ export class Track extends Thing {
         transform: parseDimensions,
       },
 
-      'Has Cover Art': {
-        property: 'disableUniqueCoverArt',
-        transform: value =>
-          (typeof value === 'boolean'
-            ? !value
-            : value),
+      'Art Tags': {property: 'artTags'},
+
+      'Referenced Artworks': {
+        property: 'referencedArtworks',
+        transform: parseAnnotatedReferences,
       },
 
-      'Always Reference By Directory': {property: 'alwaysReferenceByDirectory'},
+      // Referenced tracks
+
+      'Referenced Tracks': {property: 'referencedTracks'},
+      'Sampled Tracks': {property: 'sampledTracks'},
+
+      // Additional files
+
+      'Additional Files': {
+        property: 'additionalFiles',
+        transform: parseAdditionalFiles,
+      },
+
+      'Sheet Music Files': {
+        property: 'sheetMusicFiles',
+        transform: parseAdditionalFiles,
+      },
+
+      'MIDI Project Files': {
+        property: 'midiProjectFiles',
+        transform: parseAdditionalFiles,
+      },
+
+      // Content entries
 
       'Lyrics': {
         property: 'lyrics',
@@ -533,69 +716,19 @@ export class Track extends Thing {
         transform: parseReferencingSources,
       },
 
-      'Additional Files': {
-        property: 'additionalFiles',
-        transform: parseAdditionalFiles,
-      },
-
-      'Sheet Music Files': {
-        property: 'sheetMusicFiles',
-        transform: parseAdditionalFiles,
-      },
-
-      'MIDI Project Files': {
-        property: 'midiProjectFiles',
-        transform: parseAdditionalFiles,
-      },
-
-      'Main Release': {property: 'mainReleaseTrack'},
-      'Referenced Tracks': {property: 'referencedTracks'},
-      'Sampled Tracks': {property: 'sampledTracks'},
-
-      'Referenced Artworks': {
-        property: 'referencedArtworks',
-        transform: parseAnnotatedReferences,
-      },
+      // Shenanigans
 
       'Franchises': {ignore: true},
       'Inherit Franchises': {ignore: true},
-
-      'Artists': {
-        property: 'artistContribs',
-        transform: parseContributors,
-      },
-
-      'Contributors': {
-        property: 'contributorContribs',
-        transform: parseContributors,
-      },
-
-      'Cover Artists': {
-        property: 'coverArtistContribs',
-        transform: parseContributors,
-      },
-
-      'Track Artwork': {
-        property: 'trackArtworks',
-        transform:
-          parseArtwork({
-            thingProperty: 'trackArtworks',
-            dimensionsFromThingProperty: 'coverArtDimensions',
-            fileExtensionFromThingProperty: 'coverArtFileExtension',
-            dateFromThingProperty: 'coverArtDate',
-            artTagsFromThingProperty: 'artTags',
-            referencedArtworksFromThingProperty: 'referencedArtworks',
-            artistContribsFromThingProperty: 'coverArtistContribs',
-            artistContribsArtistProperty: 'trackCoverArtistContributions',
-          }),
-      },
-
-      'Art Tags': {property: 'artTags'},
-
       'Review Points': {ignore: true},
     },
 
     invalidFieldCombinations: [
+      {message: `Secondary releases never count in artist totals`, fields: [
+        'Main Release',
+        'Count In Artist Totals',
+      ]},
+
       {message: `Secondary releases inherit references from the main one`, fields: [
         'Main Release',
         'Referenced Tracks',
@@ -780,6 +913,30 @@ export class Track extends Thing {
 
       artwork.fileExtension,
     ];
+  }
+
+  countOwnContributionInContributionTotals(_contrib) {
+    if (!this.countInArtistTotals) {
+      return false;
+    }
+
+    if (this.isSecondaryRelease) {
+      return false;
+    }
+
+    return true;
+  }
+
+  countOwnContributionInDurationTotals(_contrib) {
+    if (!this.countInArtistTotals) {
+      return false;
+    }
+
+    if (this.isSecondaryRelease) {
+      return false;
+    }
+
+    return true;
   }
 
   [inspect.custom](depth) {

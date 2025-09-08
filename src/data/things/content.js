@@ -1,10 +1,9 @@
 import {input} from '#composite';
-import find from '#find';
 import Thing from '#thing';
 import {is, isDate} from '#validators';
 import {parseDate} from '#yaml';
 
-import {contentString, referenceList, simpleDate, soupyFind, thing}
+import {contentString, simpleDate, soupyFind, thing}
   from '#composite/wiki-properties';
 
 import {
@@ -27,7 +26,7 @@ import {
 } from '#composite/things/content';
 
 export class ContentEntry extends Thing {
-  static [Thing.getPropertyDescriptors] = ({Artist}) => ({
+  static [Thing.getPropertyDescriptors] = () => ({
     // Update & expose
 
     thing: thing(),
@@ -51,6 +50,10 @@ export class ContentEntry extends Thing {
     },
 
     accessKind: [
+      exitWithoutDependency({
+        dependency: 'accessDate',
+      }),
+
       exposeUpdateValueOrContinue({
         validate: input.value(
           is(...[
@@ -74,7 +77,7 @@ export class ContentEntry extends Thing {
       },
 
       exposeConstant({
-        value: input.value(null),
+        value: input.value('accessed'),
       }),
     ],
 
@@ -105,6 +108,12 @@ export class ContentEntry extends Thing {
     find: soupyFind(),
 
     // Expose only
+
+    isContentEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     annotationParts: [
       withAnnotationParts({
@@ -148,6 +157,12 @@ export class CommentaryEntry extends ContentEntry {
   static [Thing.getPropertyDescriptors] = () => ({
     // Expose only
 
+    isCommentaryEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     isWikiEditorCommentary: hasAnnotationPart({
       part: input.value('wiki editor'),
     }),
@@ -156,10 +171,24 @@ export class CommentaryEntry extends ContentEntry {
 
 export class LyricsEntry extends ContentEntry {
   static [Thing.getPropertyDescriptors] = () => ({
+    // Update & expose
+
+    originDetails: contentString(),
+
     // Expose only
+
+    isLyricsEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     isWikiLyrics: hasAnnotationPart({
       part: input.value('wiki lyrics'),
+    }),
+
+    helpNeeded: hasAnnotationPart({
+      part: input.value('help needed'),
     }),
 
     hasSquareBracketAnnotations: [
@@ -185,8 +214,34 @@ export class LyricsEntry extends ContentEntry {
       },
     ],
   });
+
+  static [Thing.yamlDocumentSpec] = Thing.extendDocumentSpec(ContentEntry, {
+    fields: {
+      'Origin Details': {property: 'originDetails'},
+    },
+  });
 }
 
-export class CreditingSourcesEntry extends ContentEntry {}
+export class CreditingSourcesEntry extends ContentEntry {
+  static [Thing.getPropertyDescriptors] = () => ({
+    // Expose only
 
-export class ReferencingSourcesEntry extends ContentEntry {}
+    isCreditingSourcesEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+  });
+}
+
+export class ReferencingSourcesEntry extends ContentEntry {
+  static [Thing.getPropertyDescriptors] = () => ({
+    // Expose only
+
+    isReferencingSourceEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+  });
+}

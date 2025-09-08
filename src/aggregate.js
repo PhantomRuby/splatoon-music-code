@@ -371,11 +371,12 @@ export function _withAggregate(mode, aggregateOpts, fn) {
 }
 
 export const unhelpfulTraceLines = [
-  /sugar/,
-  /sort/,
-  /aggregate/,
-  /composite/,
-  /cacheable-object/,
+  /sugar\.js/,
+  /sort\.js/,
+  /aggregate\.js/,
+  /composite\.js/,
+  /cacheable-object\.js/,
+  /html\.js/,
   /node:/,
   /<anonymous>/,
 ];
@@ -604,7 +605,7 @@ export function showAggregate(topError, {
       headerPart += ` ${colors.dim(tracePart)}`;
     }
 
-    const head1 = level % 2 === 0 ? '\u21aa' : colors.dim('\u21aa');
+    const head1 = '\u21aa';
     const bar1 = ' ';
 
     const causePart =

@@ -108,39 +108,65 @@ export default {
         : null),
   }),
 
-  data: (_query, _sprawl, _album, track) => ({
+  data: (_query, _sprawl, album, track) => ({
     isAlbumPage: !track,
     isTrackPage: !!track,
+
+    albumStyle: album.style,
   }),
 
   generate(data, relations, {html}) {
+    const presentGroupsLikeAlbum =
+      data.isAlbumPage ||
+      data.albumStyle === 'single';
+
     for (const box of [
       ...relations.groupBoxes,
       ...relations.seriesBoxes.flat(),
       ...relations.disconnectedSeriesBoxes,
     ]) {
-      box.setSlot('mode',
-        data.isAlbumPage ? 'album' : 'track');
+      box.setSlot('mode', presentGroupsLikeAlbum ? 'album' : 'track');
     }
+
+    const groupBoxes =
+      (presentGroupsLikeAlbum
+        ? [
+            relations.disconnectedSeriesBoxes,
+
+            stitchArrays({
+              groupBox: relations.groupBoxes,
+              seriesBoxes: relations.seriesBoxes,
+            }).map(({groupBox, seriesBoxes}) => [
+                groupBox,
+                seriesBoxes.map(seriesBox => [
+                  html.tag('div',
+                    {class: 'sidebar-box-joiner'},
+                    {class: 'collapsible'}),
+                  seriesBox,
+                ]),
+              ]),
+          ]
+        : [
+            relations.conjoinedBox.slots({
+              attributes: {class: 'conjoined-group-sidebar-box'},
+              boxes:
+                ([relations.disconnectedSeriesBoxes,
+                  stitchArrays({
+                    groupBox: relations.groupBoxes,
+                    seriesBoxes: relations.seriesBoxes,
+                  }).flatMap(({groupBox, seriesBoxes}) => [
+                      groupBox,
+                      ...seriesBoxes,
+                    ]),
+                ]).flat()
+                  .map(box => box.content), /* TODO: Kludge. */
+            })
+          ]);
 
     return relations.sidebar.slots({
       boxes: [
-        data.isAlbumPage && [
-          relations.disconnectedSeriesBoxes,
-
-          stitchArrays({
-            groupBox: relations.groupBoxes,
-            seriesBoxes: relations.seriesBoxes,
-          }).map(({groupBox, seriesBoxes}) => [
-              groupBox,
-              seriesBoxes.map(seriesBox => [
-                html.tag('div',
-                  {class: 'sidebar-box-joiner'},
-                  {class: 'collapsible'}),
-                seriesBox,
-              ]),
-            ]),
-        ],
+        data.isAlbumPage &&
+          groupBoxes,
 
         data.isTrackPage &&
           relations.earlierTrackReleaseBoxes,
@@ -151,20 +177,7 @@ export default {
           relations.laterTrackReleaseBoxes,
 
         data.isTrackPage &&
-          relations.conjoinedBox.slots({
-            attributes: {class: 'conjoined-group-sidebar-box'},
-            boxes:
-              ([relations.disconnectedSeriesBoxes,
-                stitchArrays({
-                  groupBox: relations.groupBoxes,
-                  seriesBoxes: relations.seriesBoxes,
-                }).flatMap(({groupBox, seriesBoxes}) => [
-                    groupBox,
-                    ...seriesBoxes,
-                  ]),
-              ]).flat()
-                .map(box => box.content), /* TODO: Kludge. */
-          }),
+          groupBoxes,
       ],
     });
   },

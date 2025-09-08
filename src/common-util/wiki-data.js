@@ -34,6 +34,9 @@ export function getKebabCase(name) {
     // General punctuation which always separates surrounding words
     .replace(/[/@#$%*()_=,[\]{}|\\;:<>?`~]/g, '-')
 
+    // More punctuation which always separates surrounding words
+    .replace(/[\u{2013}-\u{2014}]/u, '-') // En Dash, Em Dash
+
     // Accented characters
     .replace(/[áâäàå]/gi, 'a')
     .replace(/[çč]/gi, 'c')
@@ -113,10 +116,16 @@ export function matchContentEntries(sourceText) {
   let previousMatchEntry = null;
   let previousEndIndex = null;
 
+  const trimBody = body =>
+    body
+      .replace(/^\n*/, '')
+      .replace(/\n*$/, '');
+
   for (const {0: matchText, index: startIndex, groups: matchEntry}
           of sourceText.matchAll(commentaryRegexCaseSensitive)) {
     if (previousMatchEntry) {
-      previousMatchEntry.body = sourceText.slice(previousEndIndex, startIndex);
+      previousMatchEntry.body =
+        trimBody(sourceText.slice(previousEndIndex, startIndex));
     }
 
     matchEntries.push(matchEntry);
@@ -126,7 +135,8 @@ export function matchContentEntries(sourceText) {
   }
 
   if (previousMatchEntry) {
-    previousMatchEntry.body = sourceText.slice(previousEndIndex);
+    previousMatchEntry.body =
+      trimBody(sourceText.slice(previousEndIndex));
   }
 
   return matchEntries;
@@ -526,26 +536,48 @@ export function combineWikiDataArrays(arrays) {
 // Markdown stuff
 
 export function* matchMarkdownLinks(markdownSource, {marked}) {
-  const plausibleLinkRegexp = /\[.*?\)/g;
+  const plausibleLinkRegexp = /\[(?=.*?\))/g;
+
+  // Pedantic rules use more particular parentheses detection in link
+  // destinations - they allow one level of balanced parentheses, and
+  // otherwise, parentheses must be escaped. This allows for entire links
+  // to be wrapped in parentheses, e.g below:
+  //
+  //   This is so cool. ([You know??](https://example.com))
+  //
+  const definiteLinkRegexp = marked.Lexer.rules.inline.pedantic.link;
 
   let plausibleMatch = null;
   while (plausibleMatch = plausibleLinkRegexp.exec(markdownSource)) {
-    // Pedantic rules use more particular parentheses detection in link
-    // destinations - they allow one level of balanced parentheses, and
-    // otherwise, parentheses must be escaped. This allows for entire links
-    // to be wrapped in parentheses, e.g below:
-    //
-    //   This is so cool. ([You know??](https://example.com))
-    //
     const definiteMatch =
-      marked.Lexer.rules.inline.pedantic.link
-        .exec(markdownSource.slice(plausibleMatch.index));
+      definiteLinkRegexp.exec(markdownSource.slice(plausibleMatch.index));
 
-    if (definiteMatch) {
-      const [{length}, label, href] = definiteMatch;
-      const index = plausibleMatch.index + definiteMatch.index;
-
-      yield {label, href, index, length};
+    if (!definiteMatch) {
+      continue;
     }
+
+    const [{length}, label, href] = definiteMatch;
+    const index = plausibleMatch.index + definiteMatch.index;
+
+    yield {label, href, index, length};
+  }
+}
+
+export function* matchInlineLinks(source) {
+  const plausibleLinkRegexp = /\b[a-z]*:\/\/[^ ]*?(?=(?:[,.!?]*)(?:\s|$))/gm;
+
+  let plausibleMatch = null;
+  while (plausibleMatch = plausibleLinkRegexp.exec(source)) {
+    const [href] = plausibleMatch;
+    const {index} = plausibleMatch;
+    const [{length}] = plausibleMatch;
+
+    try {
+      new URL(href);
+    } catch {
+      continue;
+    }
+
+    yield {href, length, index};
   }
 }

@@ -3,12 +3,14 @@ import {atOffset, empty, repeat} from '#sugar';
 
 export default {
   contentDependencies: [
-    'generateColorStyleRules',
+    'generateColorStyleTag',
     'generateFooterLocalizationLinks',
     'generateImageOverlay',
     'generatePageSidebar',
     'generateSearchSidebarBox',
+    'generateStaticURLStyleTag',
     'generateStickyHeadingContainer',
+    'generateWikiWallpaperStyleTag',
     'transformContent',
   ],
 
@@ -28,14 +30,12 @@ export default {
     wikiColor: wikiInfo.color,
     wikiName: wikiInfo.nameShort,
     canonicalBase: wikiInfo.canonicalBase,
-    wikiWallpaperFileExtension: wikiInfo.wikiWallpaperFileExtension,
   }),
 
   data: (sprawl) => ({
     wikiColor: sprawl.wikiColor,
     wikiName: sprawl.wikiName,
     canonicalBase: sprawl.canonicalBase,
-    wikiWallpaperFileExtension: sprawl.wikiWallpaperFileExtension,
   }),
 
   relations(relation, sprawl) {
@@ -60,8 +60,14 @@ export default {
         relation('transformContent', sprawl.footerContent);
     }
 
-    relations.colorStyleRules =
-      relation('generateColorStyleRules');
+    relations.colorStyleTag =
+      relation('generateColorStyleTag');
+
+    relations.staticURLStyleTag =
+      relation('generateStaticURLStyleTag');
+
+    relations.wikiWallpaperStyleTag =
+      relation('generateWikiWallpaperStyleTag');
 
     relations.imageOverlay =
       relation('generateImageOverlay');
@@ -109,9 +115,9 @@ export default {
 
     color: {validate: v => v.isColor},
 
-    styleRules: {
-      validate: v => v.sparseArrayOf(v.isHTML),
-      default: [],
+    styleTags: {
+      type: 'html',
+      mutable: false,
     },
 
     mainClasses: {
@@ -588,25 +594,28 @@ export default {
             ])),
         ]);
 
-    const styleRulesCSS =
-      html.resolve(slots.styleRules, {normalize: 'string'});
+    const slottedStyleTags =
+      html.smush(slots.styleTags);
 
-    const fallbackBackgroundStyleRule =
-      (styleRulesCSS.match(/body::before[^}]*background-image:/)
-        ? ''
-        : `body::before {\n` +
-          `    background-image: url("${to('media.path', 'bg.' + data.wikiWallpaperFileExtension)}");\n` +
-          `}`);
+    const slottedWallpaperStyleTag =
+      slottedStyleTags.content
+        .find(tag => tag.attributes.has('class', 'wallpaper-style'));
 
-    const goshFrigginDarnitStyleRule =
-      `.image-media-link::after {\n` +
-      `    mask-image: url("${to('staticMisc.path', 'image.svg')}");\n` +
-      `}`;
+    const fallbackWallpaperStyleTag =
+      (slottedWallpaperStyleTag
+        ? html.blank()
+        : relations.wikiWallpaperStyleTag);
+
+    const usingWallpaperStyleTag =
+      (slottedWallpaperStyleTag
+        ? slottedWallpaperStyleTag
+        : html.resolve(fallbackWallpaperStyleTag, {normalize: 'tag'}));
 
     const numWallpaperParts =
-      html.resolve(slots.styleRules, {normalize: 'string'})
-        .match(/\.wallpaper-part:nth-child/g)
-        ?.length ?? 0;
+      (usingWallpaperStyleTag &&
+       usingWallpaperStyleTag.attributes.has('data-wallpaper-mode', 'parts')
+        ? parseInt(usingWallpaperStyleTag.attributes.get('data-num-wallpaper-parts'))
+        : 0);
 
     const wallpaperPartsHTML =
       html.tag('div', {class: 'wallpaper-parts'},
@@ -748,14 +757,14 @@ export default {
               href: to('staticCSS.path', 'site.css'),
             }),
 
-            html.tag('style', [
-              relations.colorStyleRules
-                .slot('color', slots.color ?? data.wikiColor),
+            relations.colorStyleTag
+              .slot('color', slots.color ?? data.wikiColor),
 
-              fallbackBackgroundStyleRule,
-              goshFrigginDarnitStyleRule,
-              slots.styleRules,
-            ]),
+            relations.staticURLStyleTag,
+
+            fallbackWallpaperStyleTag,
+
+            slottedStyleTags,
 
             html.tag('script', {
               src: to('staticLib.path', 'chroma-js/chroma.min.js'),
