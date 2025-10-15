@@ -1,20 +1,6 @@
 import {empty, stitchArrays, unique} from '#sugar';
 
 export default {
-  contentDependencies: [
-    'generateAdditionalNamesBox',
-    'generateArtTagNavLinks',
-    'generateArtTagSidebar',
-    'generateContentHeading',
-    'generatePageLayout',
-    'linkArtTagGallery',
-    'linkArtTagInfo',
-    'linkExternal',
-    'transformContent',
-  ],
-
-  extraDependencies: ['html', 'language', 'wikiData'],
-
   sprawl: ({wikiInfo}) => ({
     enableListings: wikiInfo.enableListings,
   }),
@@ -182,12 +168,12 @@ export default {
                       artTagLink: relations.relatedArtTagLinks,
                       annotation: data.relatedArtTagAnnotations,
                     }).map(({artTagLink, annotation}) =>
-                        (html.isBlank(annotation)
-                          ? artTagLink
-                          : language.$(capsule, 'tagWithAnnotation', {
+                        (annotation
+                          ? language.$(capsule, 'tagWithAnnotation', {
                               tag: artTagLink,
                               annotation,
-                            })))),
+                            })
+                          : artTagLink))),
               }))),
 
           html.tag('blockquote',

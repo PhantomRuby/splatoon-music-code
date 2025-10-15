@@ -1,8 +1,6 @@
 import {empty} from '#sugar';
 
 export default {
-  extraDependencies: ['html', 'language'],
-
   query: (thing) => ({
     entries:
       (thing.isTrack
@@ -12,13 +10,11 @@ export default {
 
   data: (query, _thing) => ({
     hasWikiEditorCommentary:
-      query.entries
-        .some(entry => entry.isWikiEditorCommentary),
+      query.entries.some(entry => entry.isWikiEditorCommentary),
 
     onlyWikiEditorCommentary:
       !empty(query.entries) &&
-      query.entries
-        .every(entry => entry.isWikiEditorCommentary),
+      query.entries.every(entry => entry.isWikiEditorCommentary),
 
     hasAnyCommentary:
       !empty(query.entries),

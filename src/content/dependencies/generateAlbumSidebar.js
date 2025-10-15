@@ -2,17 +2,6 @@ import {sortAlbumsTracksChronologically} from '#sort';
 import {stitchArrays, transposeArrays} from '#sugar';
 
 export default {
-  contentDependencies: [
-    'generateAlbumSidebarGroupBox',
-    'generateAlbumSidebarSeriesBox',
-    'generateAlbumSidebarTrackListBox',
-    'generatePageSidebar',
-    'generatePageSidebarConjoinedBox',
-    'generateTrackReleaseBox',
-  ],
-
-  extraDependencies: ['html', 'wikiData'],
-
   sprawl: ({groupData}) => ({
     // TODO: Series aren't their own things, so we access them weirdly.
     seriesData:
@@ -46,7 +35,8 @@ export default {
 
       const allReleaseAlbums =
         sortAlbumsTracksChronologically(
-          Array.from(albumTrackMap.keys()));
+          Array.from(albumTrackMap.keys()),
+          {getDate: album => albumTrackMap.get(album).date});
 
       const currentReleaseIndex =
         allReleaseAlbums.indexOf(track.album);

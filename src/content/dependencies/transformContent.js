@@ -58,28 +58,15 @@ function getArg(node, argKey) {
 }
 
 export default {
-  contentDependencies: [
-    ...(
-      Object.values(replacerSpec)
-        .map(description => description.link)
-        .filter(Boolean)),
-
-    'image',
-    'generateTextWithTooltip',
-    'generateTooltip',
-    'linkExternal',
-  ],
-
-  extraDependencies: [
-    'html',
-    'language',
-    'niceShowAggregate',
-    'to',
-    'wikiData',
-  ],
-
   sprawl(wikiData, content) {
-    const find = bindFind(wikiData, {mode: 'quiet'});
+    const find =
+      bindFind(wikiData, {
+        mode: 'quiet',
+        fuzz: {
+          capitalization: true,
+          kebab: true,
+        },
+      });
 
     const {result: parsedNodes, error} =
       parseContentNodes(content ?? '', {errorMode: 'return'});
@@ -89,6 +76,20 @@ export default {
 
       nodes: parsedNodes
         .map(node => {
+          if (node.type === 'tooltip') {
+            return {
+              i: node.i,
+              iEnd: node.iEnd,
+              type: 'tooltip',
+              data: {
+                // No recursion yet. Sorry!
+                tooltip: node.data.content[0].data,
+                label: node.data.label[0].data,
+                link: null,
+              },
+            };
+          }
+
           if (node.type !== 'tag') {
             return node;
           }
@@ -148,9 +149,16 @@ export default {
 
             data.label =
               enteredLabel ??
-                (transformName && data.thing.name
-                  ? transformName(data.thing.name, node, content)
-                  : null);
+
+              (transformName && data.thing.name &&
+               replacerKeyImplied && replacerValue === data.thing.name
+
+                ? transformName(data.thing.name, node, content)
+                : null) ??
+
+              (replacerKeyImplied
+                ? replacerValue
+                : null);
 
             data.hash = enteredHash ?? null;
 
@@ -863,8 +871,8 @@ export default {
         extractNonTextNodes()
           // Compress multiple line breaks into single line breaks,
           // except when they're preceding or following indented
-          // text (by at least two spaces).
-          .replace(/(?<!  .*)\n{2,}(?!^  )/gm, '\n') /* eslint-disable-line no-regex-spaces */
+          // text (by at least two spaces) or blockquotes.
+          .replace(/(?<!^  .*|^>.*)\n{2,}(?!^  |^>)/gm, '\n') /* eslint-disable-line no-regex-spaces */
           // Expand line breaks which don't follow a list, quote,
           // or <br> / "  ", and which don't precede or follow
           // indented text (by at least two spaces).

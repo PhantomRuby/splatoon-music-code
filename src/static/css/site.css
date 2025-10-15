@@ -1497,19 +1497,25 @@ li:not(:first-child:last-child) .tooltip:where(:not(.cover-artwork .tooltip)),
   display: inline-block;
 }
 
+.content-tooltip-guy:not(.has-link) .hoverable {
+  cursor: default;
+}
+
 .content-tooltip-guy.has-link .text-with-tooltip-interaction-cue {
   text-decoration-color: var(--primary-color);
 }
 
 .content-tooltip .tooltip-content {
   padding: 3px 4.5px;
-  width: 240px;
+  width: max-content;
+  max-width: 240px;
 }
 
 .cover-artwork .content-tooltip {
   font-size: 0.85rem;
   padding: 2px 3px;
-  width: 220px;
+  width: max-content;
+  max-width: 220px;
 }
 
 .external-icon {
@@ -1540,6 +1546,12 @@ li:not(:first-child:last-child) .tooltip:where(:not(.cover-artwork .tooltip)),
 
 .other-group-accent a {
   color: var(--page-primary-color);
+}
+
+.wiki-commentary s:not(.spoiler) {
+  text-decoration-color: #fff9;
+  text-decoration-thickness: 1.4px;
+  color: #fffb;
 }
 
 s.spoiler {
@@ -1848,6 +1860,7 @@ p.image-details.origin-details .filename-line {
 .inherited-commentary-section {
   clear: right;
   margin-top: 1em;
+  margin-bottom: 1.5em;
   margin-right: min(4vw, 60px);
   border: 2px solid var(--deep-color);
   border-radius: 4px;
@@ -2001,6 +2014,11 @@ h1 {
 
 #content li i {
   white-space: nowrap;
+}
+
+#content details {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
 }
 
 #content.top-index h1,
@@ -2547,7 +2565,9 @@ h1 a[href="#additional-names-box"]:hover {
   max-width: min(60vw, 600px);
 
   padding: 15px 20px 10px 20px;
+}
 
+#additional-names-box:not(.always-visible) {
   display: none;
 }
 
@@ -3582,6 +3602,48 @@ dl dt.content-heading {
 
 h3.content-heading {
   clear: both;
+}
+
+summary.content-heading {
+  list-style-type: none;
+}
+
+summary.content-heading .cue {
+  display: inline-flex;
+  color: var(--primary-color);
+}
+
+summary.content-heading .cue::after {
+  content: "";
+  padding-left: 0.5ch;
+  display: list-item;
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+details[open] > summary.content-heading .cue::after {
+  list-style-type: disclosure-open;
+}
+
+summary.content-heading > span:hover {
+  text-decoration: none !important;
+}
+
+summary.content-heading > span:hover .cue {
+  text-decoration: underline;
+  text-decoration-style: wavy;
+}
+
+summary.content-heading .when-open {
+  display: none;
+}
+
+details[open] > summary.content-heading .when-open {
+  display: unset;
+}
+
+details[open] > summary.content-heading .when-collapsed {
+  display: none;
 }
 
 /* This animation's name is referenced in JavaScript */

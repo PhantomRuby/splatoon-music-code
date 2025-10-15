@@ -1,20 +1,14 @@
 import {getTotalDuration} from '#wiki-data';
 
 export default {
-  contentDependencies: [
-    'generateListingIndexList',
-    'generateListingSidebar',
-    'generatePageLayout',
-  ],
-
-  extraDependencies: ['html', 'language', 'wikiData'],
-
   sprawl({albumData, trackData, wikiInfo}) {
     return {
       wikiName: wikiInfo.name,
       numTracks: trackData.length,
       numAlbums: albumData.length,
-      totalDuration: getTotalDuration(trackData),
+      totalDuration:
+        getTotalDuration(
+          trackData.filter(track => track.countInArtistTotals)),
     };
   },
 
